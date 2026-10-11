@@ -1,23 +1,35 @@
 
 import http from 'node:http';
+import { randomUUID } from 'node:crypto';
 
 const PORT = Number(process.env.PORT || 10000);
-
 const SERVER_NAME = 'carefa-mcp-diagnostic';
 const PROTOCOL_VERSION = '2025-03-26';
 
-const TOOL = {
-  name: 'carefa_connection_test',
-  description:
-    'Verify that ChatGPT can communicate with the CAREFA diagnostic MCP server. Does not access private collection data.',
-  inputSchema: {
-    type: 'object',
-    properties: {},
-    additionalProperties: false
+const TOOLS = [
+  {
+    name: 'carefa_connection_test',
+    description:
+      'Check that ChatGPT can communicate with the CAREFA MCP server. No private collector data is accessed.',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+      additionalProperties: false
+    }
+  },
+  {
+    name: 'carefa_collection_summary',
+    description:
+      'Get the authenticated CAREFA collector collection summary. Currently locked until secure account linking is verified.',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+      additionalProperties: false
+    }
   }
-};
+];
 
-function sendJson(res, status, data, extraHeaders = {}) {
+function sendJson(res, status, data, headers = {}) {
   res.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
     'Cache-Control': 'no-store',
@@ -27,7 +39,7 @@ function sendJson(res, status, data, extraHeaders = {}) {
       'Content-Type, Accept, MCP-Protocol-Version, MCP-Session-Id, Authorization',
     'Access-Control-Expose-Headers':
       'MCP-Protocol-Version, MCP-Session-Id',
-    ...extraHeaders
+    ...headers
   });
 
   res.end(JSON.stringify(data));
@@ -45,7 +57,22 @@ function rpcError(id, code, message) {
   return {
     jsonrpc: '2.0',
     id,
-    error: { code, message }
+    error: {
+      code,
+      message
+    }
+  };
+}
+
+function toolText(message, isError = false) {
+  return {
+    content: [
+      {
+        type: 'text',
+        text: message
+      }
+    ],
+    isError
   };
 }
 
@@ -59,10 +86,8 @@ function handleRpc(message) {
     return rpcError(null, -32600, 'Invalid JSON-RPC request');
   }
 
-  const method = message.method;
-  const id = message.id;
+  const { id, method, params } = message;
 
-  // MCP notifications have no response body.
   if (typeof method === 'string' && id === undefined) {
     return null;
   }
@@ -72,22 +97,20 @@ function handleRpc(message) {
   }
 
   if (method === 'initialize') {
-    const requestedVersion =
-      message.params?.protocolVersion;
-
     const supportedVersions = [
       '2025-03-26',
       '2025-06-18',
       '2025-11-25'
     ];
 
-    const protocolVersion =
-      supportedVersions.includes(requestedVersion)
-        ? requestedVersion
-        : PROTOCOL_VERSION;
+    const requestedVersion = params?.protocolVersion;
+
+    const version = supportedVersions.includes(requestedVersion)
+      ? requestedVersion
+      : PROTOCOL_VERSION;
 
     return rpcResult(id, {
-      protocolVersion,
+      protocolVersion: version,
       capabilities: {
         tools: {
           listChanged: false
@@ -95,7 +118,7 @@ function handleRpc(message) {
       },
       serverInfo: {
         name: SERVER_NAME,
-        version: '1.1.0'
+        version: '1.2.0'
       }
     });
   }
@@ -106,25 +129,33 @@ function handleRpc(message) {
 
   if (method === 'tools/list') {
     return rpcResult(id, {
-      tools: [TOOL]
+      tools: TOOLS
     });
   }
 
   if (method === 'tools/call') {
-    if (message.params?.name !== TOOL.name) {
-      return rpcError(id, -32602, 'Unknown tool');
+    const name = params?.name;
+
+    if (name === 'carefa_connection_test') {
+      return rpcResult(
+        id,
+        toolText(
+          'CAREFA MCP CONNECTION SUCCESSFUL. ChatGPT reached the Render server and called its diagnostic tool. No private collection data was accessed.'
+        )
+      );
     }
 
-    return rpcResult(id, {
-      content: [
-        {
-          type: 'text',
-          text:
-            'CAREFA MCP CONNECTION SUCCESSFUL. ChatGPT reached the diagnostic server and called its test tool. No private collector data was accessed.'
-        }
-      ],
-      isError: false
-    });
+    if (name === 'carefa_collection_summary') {
+      return rpcResult(
+        id,
+        toolText(
+          'CAREFA COLLECTION ACCESS LOCKED. Secure collector authentication and account linking have not yet been verified. No collection data was accessed.',
+          true
+        )
+      );
+    }
+
+    return rpcError(id, -32602, 'Unknown tool');
   }
 
   return rpcError(id, -32601, 'Method not found');
@@ -136,8 +167,6 @@ const server = http.createServer(async (req, res) => {
     'http://localhost'
   ).pathname;
 
-  // Record only the HTTP method, path and response status.
-  // Never log tokens, request bodies or personal data.
   res.on('finish', () => {
     console.log(
       '[CAREFA MCP]',
@@ -162,9 +191,10 @@ const server = http.createServer(async (req, res) => {
     return sendJson(res, 200, {
       status: 'ok',
       service: 'CAREFA MCP diagnostic',
-      version: '1.1.0',
+      version: '1.2.0',
       collectionAccess: false,
-      authentication: 'none - diagnostic only'
+      authentication: 'none - diagnostic only',
+      requestId: randomUUID()
     });
   }
 
@@ -174,22 +204,22 @@ const server = http.createServer(async (req, res) => {
     });
   }
 
-  // Streamable HTTP permits an MCP server without
-  // an SSE GET stream to return HTTP 405.
   if (req.method === 'GET') {
-    return sendJson(res, 405, {
-      error: 'SSE stream not supported. Use POST.'
-    }, {
-      Allow: 'POST, OPTIONS'
-    });
+    return sendJson(
+      res,
+      405,
+      { error: 'SSE stream not supported. Use POST.' },
+      { Allow: 'POST, OPTIONS' }
+    );
   }
 
   if (req.method !== 'POST') {
-    return sendJson(res, 405, {
-      error: 'Method not allowed'
-    }, {
-      Allow: 'POST, OPTIONS'
-    });
+    return sendJson(
+      res,
+      405,
+      { error: 'Method not allowed' },
+      { Allow: 'POST, OPTIONS' }
+    );
   }
 
   const chunks = [];
@@ -252,6 +282,6 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(
-    `CAREFA MCP diagnostic server v1.1.0 listening on port ${PORT}`
+    `CAREFA MCP diagnostic server v1.2.0 listening on port ${PORT}`
   );
 });
