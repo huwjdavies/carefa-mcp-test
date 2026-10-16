@@ -1,6 +1,7 @@
+import { createOAuthBridge } from './oauth.mjs';
 import http from 'node:http';
 
-import { randomUUID, randomBytes } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 
 // CAREFA Render MCP bridge
 
@@ -10,7 +11,7 @@ const SERVER_NAME = 'carefa-mcp-diagnostic';
 
 const PROTOCOL_VERSION = '2025-03-26';
 
-const VERSION = '1.4.0-dev';
+const VERSION = '1.5.0-oauth-dev';
 
 const CAREFA_APP_URL = (
 
@@ -33,16 +34,6 @@ const PUBLIC_URL = (
   process.env.RENDER_PUBLIC_URL || ''
 
 ).replace(/\/$/, '');
-
-const CALLBACK_URL = PUBLIC_URL
-
-  ? `${PUBLIC_URL}/link/callback`
-
-  : '';
-
-const STATE_TTL = 10 * 60 * 1000;
-
-const pending = new Map();
 
 const TOOLS = [
 
@@ -82,7 +73,7 @@ const TOOLS = [
 
     description:
 
-      'Get the linked CAREFA collector collection summary. Requires the secure bearer token issued during CAREFA account linking.',
+      'Get the linked CAREFA collector collection summary using this OAuth session. Requires collection:read access.',
 
     inputSchema: {
 
@@ -125,78 +116,6 @@ function sendJson(res, status, data, extra = {}) {
   });
 
   res.end(JSON.stringify(data));
-
-}
-
-function sendHtml(res, status, title, bodyHtml) {
-
-  res.writeHead(status, {
-
-    'Content-Type': 'text/html; charset=utf-8',
-
-    'Cache-Control': 'no-store',
-
-    'Pragma': 'no-cache',
-
-    'X-Content-Type-Options': 'nosniff',
-
-    'Content-Security-Policy':
-
-      "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'",
-
-    'Referrer-Policy': 'no-referrer'
-
-  });
-
-  res.end(`<!doctype html>
-
-<html lang="en">
-
-<head>
-
-<meta charset="utf-8">
-
-<meta name="viewport" content="width=device-width,initial-scale=1">
-
-<title>${escapeHtml(title)}</title>
-
-</head>
-
-<body style="font:16px system-ui;max-width:38rem;margin:3rem auto;padding:1rem">
-
-<h1>${escapeHtml(title)}</h1>
-
-${bodyHtml}
-
-</body>
-
-</html>`);
-
-}
-
-function escapeHtml(value) {
-
-  return String(value).replace(
-
-    /[&<>"']/g,
-
-    c =>
-
-      ({
-
-        '&': '&amp;',
-
-        '<': '&lt;',
-
-        '>': '&gt;',
-
-        '"': '&quot;',
-
-        "'": '&#39;'
-
-      })[c]
-
-  );
 
 }
 
@@ -270,32 +189,6 @@ function configured() {
 
 }
 
-function prunePending() {
-
-  const now = Date.now();
-
-  for (const [state, value] of pending) {
-
-    if (value.expires <= now) {
-
-      pending.delete(state);
-
-    }
-
-  }
-
-}
-
-function getBearerToken(req) {
-
-  const auth = req.headers.authorization || '';
-
-  const match = auth.match(/^Bearer\s+(.+)$/i);
-
-  return match ? match[1].trim() : '';
-
-}
-
 function getCarefaConnectFunctionUrl() {
 
   if (!CAREFA_LINK_FUNCTION_URL) return '';
@@ -318,7 +211,7 @@ function getCarefaConnectFunctionUrl() {
 
 }
 
-async function exchangeCode(code) {
+async function exchangeCode(code, callbackUrl) {
 
   const controller = new AbortController();
 
@@ -344,7 +237,7 @@ async function exchangeCode(code) {
 
         code,
 
-        callback_url: CALLBACK_URL
+        callback_url: callbackUrl
 
       }),
 
@@ -639,7 +532,7 @@ async function handleRpc(message, req) {
 
     ) {
 
-      const token = getBearerToken(req);
+      const token = req.carefaLinkToken;
 
       if (!token) {
 
@@ -757,6 +650,14 @@ async function handleRpc(message, req) {
 
 }
 
+const oauth = createOAuthBridge({
+  publicUrl: PUBLIC_URL,
+  appUrl: CAREFA_APP_URL,
+  redirectUris: JSON.parse(process.env.OAUTH_REDIRECT_URIS || '[]'),
+  configured,
+  exchangeCode,
+});
+
 const server = http.createServer(
 
   async (req, res) => {
@@ -786,6 +687,8 @@ const server = http.createServer(
       );
 
     });
+
+    if (await oauth.handle(req, res, url)) return;
 
     if (req.method === 'OPTIONS') {
 
@@ -829,11 +732,11 @@ const server = http.createServer(
 
         authentication:
 
-          'CAREFA account-link bearer token',
+          'OAuth authorization code with S256 PKCE',
 
         linkBridgeConfigured:
 
-          configured(),
+          oauth.ready(),
 
         requestId: randomUUID()
 
@@ -841,288 +744,8 @@ const server = http.createServer(
 
     }
 
-    if (
-
-      req.method === 'GET' &&
-
-      path === '/link/start'
-
-    ) {
-
-      if (!configured()) {
-
-        return sendHtml(
-
-          res,
-
-          503,
-
-          'Connection not configured',
-
-          '<p>The CAREFA secure bridge is not configured yet. No account data was accessed.</p>'
-
-        );
-
-      }
-
-      prunePending();
-
-      const state = randomBytes(32)
-
-        .toString('base64url');
-
-      pending.set(state, {
-
-        expires:
-
-          Date.now() + STATE_TTL
-
-      });
-
-      const approval = new URL(
-
-        '/AiLink',
-
-        CAREFA_APP_URL
-
-      );
-
-      approval.searchParams.set(
-
-        'cb',
-
-        CALLBACK_URL
-
-      );
-
-      approval.searchParams.set(
-
-        'svc',
-
-        'Render MCP'
-
-      );
-
-      res.writeHead(302, {
-
-        Location:
-
-          approval.toString(),
-
-        'Cache-Control':
-
-          'no-store',
-
-        'Referrer-Policy':
-
-          'no-referrer',
-
-        'Set-Cookie':
-
-          `carefa_link_state=${state}; HttpOnly; Secure; SameSite=Lax; Path=/link; Max-Age=600`
-
-      });
-
-      return res.end();
-
-    }
-
-    if (
-
-      req.method === 'GET' &&
-
-      path === '/link/callback'
-
-    ) {
-
-      const code =
-
-        url.searchParams.get('code') || '';
-
-      const cookies =
-
-        req.headers.cookie || '';
-
-      const state =
-
-        cookies
-
-          .split(';')
-
-          .map(x => x.trim())
-
-          .find(x =>
-
-            x.startsWith(
-
-              'carefa_link_state='
-
-            )
-
-          )
-
-          ?.slice(
-
-            'carefa_link_state='
-
-              .length
-
-          ) || '';
-
-      const entry =
-
-        pending.get(state);
-
-      if (state) {
-
-        pending.delete(state);
-
-      }
-
-      res.setHeader(
-
-        'Set-Cookie',
-
-        'carefa_link_state=; HttpOnly; Secure; SameSite=Lax; Path=/link; Max-Age=0'
-
-      );
-
-      if (
-
-        !configured() ||
-
-        !code ||
-
-        code.length > 512 ||
-
-        !state ||
-
-        !entry ||
-
-        entry.expires <= Date.now()
-
-      ) {
-
-        return sendHtml(
-
-          res,
-
-          400,
-
-          'Link not completed',
-
-          '<p>The link request is missing, expired or invalid. Please start again.</p>'
-
-        );
-
-      }
-
-      try {
-
-        const token =
-
-          await exchangeCode(code);
-
-        const safeToken =
-
-          escapeHtml(token);
-
-        return sendHtml(
-
-          res,
-
-          200,
-
-          'CAREFA approval received',
-
-          `
-
-<p>Your CAREFA account link succeeded.</p>
-
-<p>
-
-This token connects this specific CAREFA account
-
-to the private collection tool.
-
-</p>
-
-<p><strong>Keep it private.</strong></p>
-
-<p>
-
-Revoking the Render MCP link from CAREFA
-
-invalidates this token immediately.
-
-</p>
-
-<p>
-
-Copy the complete token below:
-
-</p>
-
-<textarea
-
-readonly
-
-style="
-
-width:100%;
-
-min-height:10rem;
-
-box-sizing:border-box;
-
-font:14px ui-monospace,monospace;
-
-padding:.8rem;
-
-word-break:break-all;
-
-"
-
->${safeToken}</textarea>
-
-<p>
-
-You will use this once as the Bearer token
-
-when connecting the CAREFA MCP service
-
-to ChatGPT.
-
-</p>
-
-`
-
-        );
-
-      } catch (error) {
-
-        console.error(
-
-          '[CAREFA MCP] Link exchange failed:',
-
-          error?.message
-
-        );
-
-        return sendHtml(
-
-          res,
-
-          502,
-
-          'Connection could not be completed',
-
-          '<p>CAREFA rejected the exchange or the backend was unavailable. No collection data was returned.</p>'
-
-        );
-
-      }
-
+    if (path === '/link/start' || path === '/link/callback') {
+      return sendJson(res, 400, { error: 'Start sign-in through the OAuth authorization endpoint.' });
     }
 
     if (path !== '/mcp') {
@@ -1142,6 +765,12 @@ to ChatGPT.
       );
 
     }
+
+    const session = oauth.authenticate(req);
+    if (!session) return oauth.challenge(res);
+    // The caller's OAuth session selects exactly one CAREFA link token.
+    // Never accept an upstream CAREFA token directly from an MCP caller.
+    req.carefaLinkToken = session.linkToken;
 
     if (req.method === 'GET') {
 
@@ -1373,10 +1002,11 @@ server.listen(
 
     console.log(
 
-      `CAREFA MCP diagnostic server ${VERSION} listening on port ${PORT}`
+      `CAREFA MCP diagnostic server ${VERSION} listening on port ${server.address().port}`
 
     );
 
   }
 
 );
+
