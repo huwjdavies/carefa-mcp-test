@@ -170,6 +170,7 @@ export function createOAuthBridge({ publicUrl, appUrl, redirectUris, configured,
       const destination = new URL(entry.redirect_uri);
       destination.searchParams.set('state', entry.state);
       if (url.searchParams.has('error')) {
+        console.warn('[CAREFA OAuth] Callback returned upstream denial');
         destination.searchParams.set('error', 'access_denied');
         return redirect(res, destination.toString());
       }
@@ -179,11 +180,13 @@ export function createOAuthBridge({ publicUrl, appUrl, redirectUris, configured,
       try {
         const linkToken = await exchangeCode(code, entry.callbackUrl);
         if (typeof linkToken !== 'string' || linkToken.length < 32) throw new Error('invalid upstream response');
+        console.info('[CAREFA OAuth] Upstream exchange succeeded; issuing authorization code');
         const oauthCode = random();
         codes.set(hash(oauthCode), { ...entry, linkToken, expires: now() + CODE_MS });
         destination.searchParams.set('code', oauthCode);
         return redirect(res, destination.toString());
-      } catch {
+      } catch (err) {
+        console.warn('[CAREFA OAuth] Upstream exchange failed:', err instanceof Error ? err.message : 'unknown error');
         destination.searchParams.set('error', 'server_error');
         return redirect(res, destination.toString());
       }
