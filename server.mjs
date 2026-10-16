@@ -85,6 +85,18 @@ const TOOLS = [
 
     }
 
+  },
+  {
+    name: 'carefa_collection_cards',
+    description: 'Read one page of cards owned by the authenticated CAREFA collector. No private account details. Requires collection:read.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        source: { type: 'string', enum: ['user_cards', 'collection_entries'] },
+        page: { type: 'integer', minimum: 0, maximum: 10000 }
+      },
+      additionalProperties: false
+    }
   }
 
 ];
@@ -365,6 +377,35 @@ async function fetchCollectionSummary(linkToken) {
 
 }
 
+async function fetchCollectionCards(linkToken, source, page) {
+  const endpoint = getCarefaConnectFunctionUrl();
+  if (!endpoint) throw new Error('CAREFA collection endpoint could not be derived');
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 10000);
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-carefa-bridge-secret': BRIDGE_SECRET,
+        'x-carefa-link-token': linkToken
+      },
+      body: JSON.stringify({ detail: 'cards', source, page }),
+      signal: controller.signal,
+      redirect: 'error'
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data?.error || `CAREFA cards rejected (${response.status})`);
+    if (!Array.isArray(data.cards) || !data.pagination || data.pagination.source !== source ||
+        data.pagination.page !== page) {
+      throw new Error('CAREFA detailed collection access is not available on this endpoint');
+    }
+    return { cards: data.cards, pagination: data.pagination };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function handleRpc(message, req) {
 
   if (
@@ -624,6 +665,23 @@ async function handleRpc(message, req) {
 
       }
 
+    }
+
+    if (params?.name === 'carefa_collection_cards') {
+      const token = req.carefaLinkToken;
+      if (!token) return rpcResult(id, toolText('CAREFA COLLECTION ACCESS LOCKED.', true));
+      const args = params?.arguments || {};
+      if (Object.keys(args).some(k => !['source', 'page'].includes(k)) ||
+          (args.source !== undefined && !['user_cards', 'collection_entries'].includes(args.source)) ||
+          (args.page !== undefined && (!Number.isSafeInteger(args.page) || args.page < 0 || args.page > 10000))) {
+        return rpcError(id, -32602, 'Invalid collection page arguments');
+      }
+      try {
+        const data = await fetchCollectionCards(token, args.source || 'user_cards', args.page ?? 0);
+        return rpcResult(id, toolText(JSON.stringify(data)));
+      } catch (error) {
+        return rpcResult(id, toolText(`CAREFA CARD ACCESS DENIED. ${error?.message || 'Request failed'}`, true));
+      }
     }
 
     return rpcError(
