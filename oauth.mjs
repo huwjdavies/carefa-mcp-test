@@ -78,7 +78,7 @@ export function createOAuthBridge({ publicUrl, appUrl, redirectUris, configured,
   async function handle(req, res, url) {
     const path = url.pathname;
     const known = ['/.well-known/oauth-protected-resource', '/.well-known/oauth-protected-resource/mcp',
-      '/.well-known/oauth-authorization-server', '/oauth/register', '/oauth/authorize',
+      '/.well-known/oauth-authorization-server', '/.well-known/openid-configuration', '/oauth/register', '/oauth/authorize',
       '/oauth/token', '/oauth/revoke', '/link/callback'];
     if (!known.includes(path)) return false;
     prune();
@@ -89,14 +89,16 @@ export function createOAuthBridge({ publicUrl, appUrl, redirectUris, configured,
     const discovery = req.method === 'GET' && (
       path === '/.well-known/oauth-protected-resource' ||
       path === '/.well-known/oauth-protected-resource/mcp' ||
-      path === '/.well-known/oauth-authorization-server'
+      path === '/.well-known/oauth-authorization-server' ||
+      path === '/.well-known/openid-configuration'
     );
     if (!ready() && !discovery) return error(res, 503, 'oauth_not_configured');
     if (req.method === 'GET' && path.startsWith('/.well-known/oauth-protected-resource')) {
       return json(res, 200, { resource, authorization_servers: [issuer],
         scopes_supported: [SCOPE], bearer_methods_supported: ['header'] });
     }
-    if (req.method === 'GET' && path === '/.well-known/oauth-authorization-server') {
+    if (req.method === 'GET' && (path === '/.well-known/oauth-authorization-server' ||
+        path === '/.well-known/openid-configuration')) {
       return json(res, 200, { issuer, authorization_endpoint: `${issuer}/oauth/authorize`,
         token_endpoint: `${issuer}/oauth/token`, registration_endpoint: `${issuer}/oauth/register`,
         revocation_endpoint: `${issuer}/oauth/revoke`, scopes_supported: [SCOPE],
