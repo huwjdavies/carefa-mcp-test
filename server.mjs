@@ -608,6 +608,19 @@ async function handleRpc(message, req) {
 
     }
 
+    if (params?.name === 'carefa_demo_collection') {
+      return rpcResult(
+        id,
+        toolText(JSON.stringify({
+          collector: 'Test Trainer',
+          cards_owned: 1250,
+          unique_cards: 987,
+          collection_value_gbp: 8450,
+          demo: true
+        }))
+      );
+    }
+
     if (
 
       params?.name ===
