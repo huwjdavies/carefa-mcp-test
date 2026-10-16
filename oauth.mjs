@@ -117,6 +117,14 @@ export function createOAuthBridge({ publicUrl, appUrl, redirectUris, configured,
           (data.token_endpoint_auth_method && data.token_endpoint_auth_method !== 'none') ||
           (data.grant_types && (!Array.isArray(data.grant_types) || data.grant_types.length !== 1 || data.grant_types[0] !== 'authorization_code')) ||
           (data.response_types && (!Array.isArray(data.response_types) || data.response_types.length !== 1 || data.response_types[0] !== 'code'))) {
+        // Report only validation categories, never registration payloads or credentials.
+        const reason = !data || !Array.isArray(data.redirect_uris) ? 'missing_redirect_uris'
+          : data.redirect_uris.length < 1 || data.redirect_uris.length > 10 ? 'redirect_count'
+          : !data.redirect_uris.every(u => redirectUris.includes(u)) ? 'redirect_not_allowlisted'
+          : data.token_endpoint_auth_method && data.token_endpoint_auth_method !== 'none' ? 'auth_method'
+          : data.grant_types && (!Array.isArray(data.grant_types) || data.grant_types.length !== 1 || data.grant_types[0] !== 'authorization_code') ? 'grant_types'
+          : 'response_types';
+        console.warn('[CAREFA OAuth] Registration rejected:', reason);
         return error(res, 400, 'invalid_client_metadata');
       }
       const client_id = random();
