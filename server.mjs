@@ -47,6 +47,16 @@ const pending = new Map();
 const TOOLS = [
 
   {
+    name: 'carefa_demo_collection',
+    description: 'Return fictional CAREFA collection statistics for testing. No real user data is accessed.',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+      additionalProperties: false
+    }
+  },
+
+  {
 
     name: 'carefa_connection_test',
 
