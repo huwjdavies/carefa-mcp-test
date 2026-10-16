@@ -768,6 +768,14 @@ const server = http.createServer(
 
     }
 
+    // Public read-only diagnostic: only tool names, never credentials or collector data.
+    if (req.method === 'GET' && path === '/diagnostics/tool-names') {
+      return sendJson(res, 200, {
+        toolCount: TOOLS.length,
+        toolNames: TOOLS.map(tool => tool.name)
+      }, { 'Cache-Control': 'no-store' });
+    }
+
     if (
 
       req.method === 'GET' &&
