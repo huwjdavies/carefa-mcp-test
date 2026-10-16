@@ -75,7 +75,16 @@ export function createOAuthBridge({ publicUrl, appUrl, redirectUris, configured,
       '/oauth/token', '/oauth/revoke', '/link/callback'];
     if (!known.includes(path)) return false;
     prune();
-    if (!ready()) return error(res, 503, 'oauth_not_configured');
+    // Discovery is public metadata, not an authorization grant. Keep it available
+    // while the isolated test environment is awaiting its callback allowlist.
+    // Every registration, authorization, token and callback operation still
+    // requires the complete bridge configuration below.
+    const discovery = req.method === 'GET' && (
+      path === '/.well-known/oauth-protected-resource' ||
+      path === '/.well-known/oauth-protected-resource/mcp' ||
+      path === '/.well-known/oauth-authorization-server'
+    );
+    if (!ready() && !discovery) return error(res, 503, 'oauth_not_configured');
     if (req.method === 'GET' && path.startsWith('/.well-known/oauth-protected-resource')) {
       return json(res, 200, { resource, authorization_servers: [issuer],
         scopes_supported: [SCOPE], bearer_methods_supported: ['header'] });
