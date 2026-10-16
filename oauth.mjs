@@ -28,6 +28,13 @@ export function createOAuthBridge({ publicUrl, appUrl, redirectUris, configured,
   const issuer = publicUrl;
   const resource = `${issuer}/mcp`;
   const clients = new Map(), pending = new Map(), codes = new Map(), tokens = new Map();
+  // Stable public OAuth client for the allowlisted ChatGPT callback; no client secret.
+  // A deterministic ID survives free-tier restarts without storing credentials.
+  const fixedClientId = `carefa-chatgpt-${hash(`${issuer}|${redirectUris.join('|')}`).slice(0,32)}`;
+  if (redirectUris.length) clients.set(fixedClientId, {
+    client_id: fixedClientId, redirect_uris: [...redirectUris],
+    token_endpoint_auth_method: 'none', grant_types: ['authorization_code'], response_types: ['code']
+  });
   const ready = () => configured() && safeHttps(issuer) && new URL(issuer).origin === issuer &&
     safeHttps(appUrl) && redirectUris.length > 0;
   function prune() {
