@@ -127,10 +127,9 @@ export function createOAuthBridge({ publicUrl, appUrl, redirectUris, configured,
         console.warn('[CAREFA OAuth] Registration rejected:', reason);
         return error(res, 400, 'invalid_client_metadata');
       }
-      const client_id = random();
-      const client = { client_id, redirect_uris: [...data.redirect_uris],
-        token_endpoint_auth_method: 'none', grant_types: ['authorization_code'], response_types: ['code'] };
-      clients.set(client_id, client);
+      // Return a stable public client ID so Render free-tier restarts cannot
+      // invalidate ChatGPT's registration. Redirect URIs are strictly allowlisted.
+      const client = clients.get(fixedClientId);
       return json(res, 201, client);
     }
     if (req.method === 'GET' && path === '/oauth/authorize') {
