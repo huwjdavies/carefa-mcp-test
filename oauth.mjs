@@ -140,10 +140,24 @@ export function createOAuthBridge({ publicUrl, appUrl, redirectUris, configured,
       }
       const p = Object.fromEntries(url.searchParams);
       const client = clients.get(p.client_id);
-      if (!client || !client.redirect_uris.includes(p.redirect_uri)) return error(res, 400, 'invalid_request');
+      if (!client || !client.redirect_uris.includes(p.redirect_uri)) {
+        console.warn('[CAREFA OAuth] Authorization rejected:', !client ? 'unknown_client' : 'redirect_uri_mismatch');
+        return error(res, 400, 'invalid_request');
+      }
       if (p.response_type !== 'code' || p.code_challenge_method !== 'S256' ||
           !/^[A-Za-z0-9_-]{43}$/.test(p.code_challenge || '') || p.resource !== resource ||
-          p.scope !== SCOPE || !p.state || p.state.length > 1024) return error(res, 400, 'invalid_request');
+          p.scope !== SCOPE || !p.state || p.state.length > 1024) {
+        console.warn('[CAREFA OAuth] Authorization parameters rejected:', {
+          response_type: p.response_type === 'code',
+          pkce_method: p.code_challenge_method === 'S256',
+          pkce_format: /^[A-Za-z0-9_-]{43}$/.test(p.code_challenge || ''),
+          resource_match: p.resource === resource,
+          scope_match: p.scope === SCOPE,
+          state_present: Boolean(p.state),
+          state_length_ok: Boolean(p.state && p.state.length <= 1024)
+        });
+        return error(res, 400, 'invalid_request');
+      }
       if (pending.size >= MAX_ENTRIES) return error(res, 429, 'temporarily_unavailable');
       const session = random();
       const upstreamState = random();
