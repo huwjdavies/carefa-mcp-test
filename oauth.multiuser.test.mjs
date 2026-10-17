@@ -86,3 +86,49 @@ test('expiry blocks refresh; in-memory state does not survive new instance', asy
   const fresh = fixture();
   assert.equal(await fresh.bridge.authenticate({headers:{authorization:'Bearer '+a.access_token}}),undefined);
 });
+
+test('OAuth sign-in completes across bridge recreation with durable handshake adapter', async () => {
+  const records = new Map();
+  const handshakes = {
+    async put(kind, secret, clientId, payload, expiresAt) {
+      records.set(kind + ':' + secret, {clientId,payload,expiresAt});
+    },
+    async consume(kind, secret) {
+      const key = kind + ':' + secret;
+      const entry = records.get(key);
+      records.delete(key);
+      return entry && entry.expiresAt > Date.now() ? entry : null;
+    }
+  };
+  const make = () => createOAuthBridge({
+    publicUrl:issuer, appUrl:'https://carefa.example.test', redirectUris:[redirectUri],
+    configured:()=>true, exchangeCode:async code=>code === 'owner-a' ? 'A'.repeat(43) : 'B'.repeat(43),
+    durableHandshakes:handshakes
+  });
+  const startBridge = make();
+  const client = (await call(startBridge,'POST','/oauth/register',{json:{redirect_uris:[redirectUri]}})).json.client_id;
+  const authorize = new URL('/oauth/authorize',issuer);
+  Object.entries({client_id:client,redirect_uri:redirectUri,response_type:'code',
+    code_challenge:challenge,code_challenge_method:'S256',resource,scope:'collection:read',state:'restart-state'})
+    .forEach(([k,v])=>authorize.searchParams.set(k,v));
+  const begin = await call(startBridge,'GET',authorize.pathname+authorize.search);
+  assert.equal(begin.status,302);
+  const callback = new URL(new URL(begin.headers.location).searchParams.get('cb'));
+  callback.searchParams.set('code','owner-a');
+  const cookie = begin.headers['set-cookie'].split(';')[0];
+  const resumed = make();
+  const finish = await call(resumed,'GET',callback.pathname+callback.search,{cookie});
+  assert.equal(finish.status,302);
+  const code = new URL(finish.headers.location).searchParams.get('code');
+  assert.ok(code);
+  const replayCallback = await call(resumed,'GET',callback.pathname+callback.search,{cookie});
+  assert.equal(replayCallback.status,400);
+  const tokenBridge = make();
+  const token = await call(tokenBridge,'POST','/oauth/token',{form:{grant_type:'authorization_code',
+    code,client_id:client,redirect_uri:redirectUri,code_verifier:verifier,resource}});
+  assert.equal(token.status,200);
+  assert.equal((await tokenBridge.authenticate({headers:{authorization:'Bearer '+token.json.access_token}})).linkToken,'A'.repeat(43));
+  const replay = await call(tokenBridge,'POST','/oauth/token',{form:{grant_type:'authorization_code',
+    code,client_id:client,redirect_uri:redirectUri,code_verifier:verifier,resource}});
+  assert.equal(replay.status,400);
+});
