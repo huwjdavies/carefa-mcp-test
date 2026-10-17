@@ -639,6 +639,8 @@ async function handleRpc(message, req) {
 
               '',
 
+              typeof data?.user?.collector_fingerprint === 'string' && /^collector-v1-[A-Za-z0-9_-]{22}$/.test(data.user.collector_fingerprint) ? `Collector fingerprint: ${data.user.collector_fingerprint}` : 'Collector fingerprint: unavailable (CAREFA identity endpoint not upgraded)',
+
               'Authenticated CAREFA account link verified.'
 
             ].join('\n')
