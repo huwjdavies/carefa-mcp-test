@@ -874,7 +874,7 @@ const server = http.createServer(
 
     }
 
-    const session = oauth.authenticate(req);
+    const session = await oauth.authenticate(req);
     if (!session) return oauth.challenge(res);
     // The caller's OAuth session selects exactly one CAREFA link token.
     // Never accept an upstream CAREFA token directly from an MCP caller.
