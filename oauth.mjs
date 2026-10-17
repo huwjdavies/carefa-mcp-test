@@ -22,7 +22,7 @@ const safeHttps = value => {
 // Development-only storage: rotating refresh tokens are supported, but process restarts
 // still invalidate sessions. Production requires a transactional durable store.
 export function createOAuthBridge({ publicUrl, appUrl, redirectUris, configured,
-  exchangeCode, now = Date.now }) {
+  exchangeCode, now = Date.now, durableGrants = null }) {
   if (!Array.isArray(redirectUris) || redirectUris.some(u => typeof u !== 'string' || !safeHttps(u))) {
     throw new Error('OAUTH_REDIRECT_URIS must be a JSON array of exact HTTPS callback URLs');
   }
@@ -66,10 +66,10 @@ export function createOAuthBridge({ publicUrl, appUrl, redirectUris, configured,
     }
     return value;
   }
-  function authenticate(req) {
+  async function authenticate(req) {
     prune();
     const match = /^Bearer ([A-Za-z0-9_-]{43})$/i.exec(req.headers.authorization || '');
-    return match ? tokens.get(hash(match[1])) : undefined;
+    return match ? (durableGrants ? await durableGrants.authenticate(match[1], resource) : tokens.get(hash(match[1]))) : undefined;
   }
   function challenge(res) {
     return json(res, 401, { error: 'invalid_token' }, {
@@ -216,9 +216,14 @@ export function createOAuthBridge({ publicUrl, appUrl, redirectUris, configured,
       if (!client) return error(res, 400, 'invalid_client');
       if (path === '/oauth/revoke') {
         const key = hash(p.get('token') || '');
+        if (durableGrants) await durableGrants.revoke(p.get('token') || '', client.client_id);
         if (tokens.get(key)?.client_id === client.client_id) tokens.delete(key);
         if (refreshTokens.get(key)?.client_id === client.client_id) refreshTokens.delete(key);
         return json(res, 200, {});
+      }
+      if (p.get('grant_type') === 'refresh_token' && durableGrants) {
+        const result = await durableGrants.refresh({ refreshToken: p.get('refresh_token'), clientId: client.client_id, resource: p.get('resource') });
+        return result ? json(res, 200, result) : error(res, 400, 'invalid_grant');
       }
       if (p.get('grant_type') === 'refresh_token') {
         const oldKey = hash(p.get('refresh_token') || '');
@@ -242,6 +247,10 @@ export function createOAuthBridge({ publicUrl, appUrl, redirectUris, configured,
           entry.resource !== p.get('resource') || !/^[A-Za-z0-9._~-]{43,128}$/.test(verifier) ||
           !equal(hash(verifier), entry.code_challenge)) return error(res, 400, 'invalid_grant');
       if (tokens.size >= MAX_ENTRIES) return error(res, 429, 'temporarily_unavailable');
+      if (durableGrants) {
+        const result = await durableGrants.issue({ clientId: entry.client_id, linkToken: entry.linkToken, resource: entry.resource, scope: SCOPE });
+        return json(res, 200, result);
+      }
       const token = random(), refreshToken = random();
       const grant = { linkToken: entry.linkToken, client_id: entry.client_id, resource: entry.resource, scope: SCOPE };
       tokens.set(hash(token), { ...grant, expires: now() + TOKEN_MS });
