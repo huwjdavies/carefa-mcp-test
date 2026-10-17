@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, createHash } from 'node:crypto';
 import { createDurableGrants } from './durable-grants.mjs';
 
 const databaseUrl = process.env.DATABASE_URL;
@@ -36,4 +36,4 @@ integration('PostgreSQL stores independent collector grants across adapter resta
     await pool.end();
   }
 });
-function requireDigest(value) { return value; }
+function requireDigest(value) { return createHash('sha256').update(value).digest('base64url'); }
