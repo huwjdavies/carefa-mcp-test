@@ -15,7 +15,7 @@ integration('PostgreSQL stores independent collector grants across adapter resta
   const resource = 'https://integration.example.test/mcp';
   const a = 'collector-A-' + randomBytes(16).toString('hex');
   const b = 'collector-B-' + randomBytes(16).toString('hex');
-  let tokensA, tokensB;
+  let tokensA, tokensB, nextA;
   try {
     tokensA = await grants.issue({clientId:'integration-client',linkToken:a,resource});
     tokensB = await grants.issue({clientId:'integration-client',linkToken:b,resource});
@@ -23,8 +23,10 @@ integration('PostgreSQL stores independent collector grants across adapter resta
     assert.equal((await grants.authenticate(tokensB.access_token,resource)).linkToken,b);
     const restarted = createDurableGrants({pool,encryptionKey});
     assert.equal((await restarted.authenticate(tokensA.access_token,resource)).linkToken,a);
-    const nextA = await restarted.refresh({refreshToken:tokensA.refresh_token,clientId:'integration-client',resource});
+    nextA = await restarted.refresh({refreshToken:tokensA.refresh_token,clientId:'integration-client',resource});
     assert.ok(nextA);
+    assert.equal(await restarted.refresh({refreshToken:tokensB.refresh_token,clientId:'wrong-client',resource}),null);
+    assert.equal(await restarted.authenticate(tokensA.access_token,'https://wrong.example.test/mcp'),null);
     assert.equal((await restarted.authenticate(nextA.access_token,resource)).linkToken,a);
     assert.equal(await restarted.refresh({refreshToken:tokensA.refresh_token,clientId:'integration-client',resource}),null);
     assert.equal((await restarted.authenticate(tokensB.access_token,resource)).linkToken,b);
@@ -32,7 +34,7 @@ integration('PostgreSQL stores independent collector grants across adapter resta
     assert.equal(await restarted.authenticate(nextA.access_token,resource),null);
     assert.equal((await restarted.authenticate(tokensB.access_token,resource)).linkToken,b);
   } finally {
-    await pool.query('DELETE FROM oauth_sessions WHERE token_hash = ANY($1)', [[tokensA?.access_token,tokensA?.refresh_token,tokensB?.access_token,tokensB?.refresh_token].filter(Boolean).map(t=>requireDigest(t))]).catch(()=>{});
+    await pool.query('DELETE FROM oauth_sessions WHERE token_hash = ANY($1)', [[tokensA?.access_token,tokensA?.refresh_token,tokensB?.access_token,tokensB?.refresh_token,nextA?.access_token,nextA?.refresh_token].filter(Boolean).map(t=>requireDigest(t))]).catch(()=>{});
     await pool.end();
   }
 });
