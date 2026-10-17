@@ -1,4 +1,5 @@
 import { createOAuthBridge } from './oauth.mjs';
+import { initializeDurableGrants } from './db/initialize.mjs';
 import http from 'node:http';
 
 import { randomUUID } from 'node:crypto';
@@ -750,12 +751,14 @@ async function handleRpc(message, req) {
 
 }
 
+const durableStorage = await initializeDurableGrants();
 const oauth = createOAuthBridge({
   publicUrl: PUBLIC_URL,
   appUrl: CAREFA_APP_URL,
   redirectUris: JSON.parse(process.env.OAUTH_REDIRECT_URIS || '[]'),
   configured,
   exchangeCode,
+  durableGrants: durableStorage?.grants ?? null,
 });
 
 const server = http.createServer(
