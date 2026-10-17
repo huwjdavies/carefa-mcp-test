@@ -87,6 +87,11 @@ const TOOLS = [
 
   },
   {
+    name: 'carefa_pokemon_count',
+    description: 'Count matching Pokemon cards in the linked collector collection. Read-only, authenticated and owner-scoped. Returns unique records and total owned copies.',
+    inputSchema: { type: 'object', properties: { pokemon: { type: 'string', minLength: 1, maxLength: 80 } }, required: ['pokemon'], additionalProperties: false }
+  },
+  {
     name: 'carefa_collection_cards',
     description: 'Read one page of cards owned by the authenticated CAREFA collector. No private account details. Requires collection:read.',
     inputSchema: {
@@ -665,6 +670,43 @@ async function handleRpc(message, req) {
 
       }
 
+    }
+
+    if (params?.name === 'carefa_pokemon_count') {
+      const token = req.carefaLinkToken;
+      if (!token) return rpcResult(id, toolText('CAREFA COLLECTION ACCESS LOCKED.', true));
+      const args = params?.arguments || {};
+      if (Object.keys(args).some(k => k !== 'pokemon') || typeof args.pokemon !== 'string' ||
+          args.pokemon.trim().length < 1 || args.pokemon.length > 80) {
+        return rpcError(id, -32602, 'Invalid pokemon name');
+      }
+      try {
+        const endpoint = getCarefaConnectFunctionUrl();
+        if (!endpoint) throw new Error('CAREFA collection endpoint not configured');
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 15000);
+        let response;
+        try {
+          response = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-carefa-bridge-secret': BRIDGE_SECRET,
+              'x-carefa-link-token': token },
+            body: JSON.stringify({ detail: 'pokemon_count', pokemon: args.pokemon.trim() }),
+            signal: controller.signal,
+            redirect: 'error'
+          });
+        } finally { clearTimeout(timer); }
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data?.error || `CAREFA count rejected (${response.status})`);
+        if (data?.pokemon_count?.pokemon?.toLowerCase() !== args.pokemon.trim().toLowerCase() ||
+            !Number.isSafeInteger(data?.pokemon_count?.unique_records) ||
+            !Number.isSafeInteger(data?.pokemon_count?.total_copies)) {
+          throw new Error('CAREFA count endpoint is not ready or returned invalid data');
+        }
+        return rpcResult(id, toolText(JSON.stringify(data.pokemon_count)));
+      } catch (error) {
+        return rpcResult(id, toolText(`CAREFA COUNT UNAVAILABLE. ${error?.message || 'Request failed'}`, true));
+      }
     }
 
     if (params?.name === 'carefa_collection_cards') {
