@@ -22,7 +22,7 @@ const safeHttps = value => {
 // Development-only storage: rotating refresh tokens are supported, but process restarts
 // still invalidate sessions. Production requires a transactional durable store.
 export function createOAuthBridge({ publicUrl, appUrl, redirectUris, configured,
-  exchangeCode, now = Date.now, durableGrants = null }) {
+  exchangeCode, now = Date.now, durableGrants = null, durableHandshakes = null }) {
   if (!Array.isArray(redirectUris) || redirectUris.some(u => typeof u !== 'string' || !safeHttps(u))) {
     throw new Error('OAUTH_REDIRECT_URIS must be a JSON array of exact HTTPS callback URLs');
   }
@@ -162,7 +162,8 @@ export function createOAuthBridge({ publicUrl, appUrl, redirectUris, configured,
       const session = random();
       const upstreamState = random();
       const callbackUrl = `${issuer}/link/callback?state=${upstreamState}`;
-      pending.set(hash(session), { ...p, upstreamState, callbackUrl, expires: now() + SESSION_MS });
+      if (durableHandshakes) await durableHandshakes.put('pending', session, p.client_id, { ...p, upstreamState, callbackUrl }, now() + SESSION_MS);
+      else pending.set(hash(session), { ...p, upstreamState, callbackUrl, expires: now() + SESSION_MS });
       const approval = new URL('/AiLink', appUrl);
       approval.searchParams.set('cb', callbackUrl);
       approval.searchParams.set('svc', 'Render MCP');
@@ -175,8 +176,9 @@ export function createOAuthBridge({ publicUrl, appUrl, redirectUris, configured,
         .filter(x => x.startsWith('__Secure-carefa_oauth='));
       const cookie = cookies.length === 1 ? cookies[0].slice('__Secure-carefa_oauth='.length) : '';
       const key = hash(cookie);
-      const entry = pending.get(key);
-      pending.delete(key); // Consume before any network await to prevent parallel replay.
+      const stored = durableHandshakes ? await durableHandshakes.consume('pending', cookie) : null;
+      const entry = durableHandshakes ? stored?.payload : pending.get(key);
+      if (!durableHandshakes) pending.delete(key); // Consume before any network await to prevent parallel replay.
       res.setHeader('Set-Cookie', '__Secure-carefa_oauth=; HttpOnly; Secure; SameSite=Lax; Path=/link/callback; Max-Age=0');
       if (!entry || url.searchParams.getAll('code').length > 1 ||
           url.searchParams.getAll('state').length !== 1 ||
@@ -196,7 +198,8 @@ export function createOAuthBridge({ publicUrl, appUrl, redirectUris, configured,
         if (typeof linkToken !== 'string' || linkToken.length < 32) throw new Error('invalid upstream response');
         console.info('[CAREFA OAuth] Upstream exchange succeeded; issuing authorization code');
         const oauthCode = random();
-        codes.set(hash(oauthCode), { ...entry, linkToken, expires: now() + CODE_MS });
+        if (durableHandshakes) await durableHandshakes.put('code', oauthCode, entry.client_id, { ...entry, linkToken }, now() + CODE_MS);
+        else codes.set(hash(oauthCode), { ...entry, linkToken, expires: now() + CODE_MS });
         destination.searchParams.set('code', oauthCode);
         return redirect(res, destination.toString());
       } catch (err) {
@@ -240,8 +243,9 @@ export function createOAuthBridge({ publicUrl, appUrl, redirectUris, configured,
       }
       if (p.get('grant_type') !== 'authorization_code') return error(res, 400, 'unsupported_grant_type');
       const key = hash(p.get('code') || '');
-      const entry = codes.get(key);
-      codes.delete(key); // One attempt per authorization code.
+      const stored = durableHandshakes ? await durableHandshakes.consume('code', p.get('code') || '') : null;
+      const entry = durableHandshakes ? stored?.payload : codes.get(key);
+      if (!durableHandshakes) codes.delete(key); // One attempt per authorization code.
       const verifier = p.get('code_verifier') || '';
       if (!entry || entry.client_id !== client.client_id || entry.redirect_uri !== p.get('redirect_uri') ||
           entry.resource !== p.get('resource') || !/^[A-Za-z0-9._~-]{43,128}$/.test(verifier) ||
