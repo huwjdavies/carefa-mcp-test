@@ -761,6 +761,7 @@ const oauth = createOAuthBridge({
   configured,
   exchangeCode,
   durableGrants: durableStorage?.grants ?? null,
+  durableHandshakes: durableStorage?.handshakes ?? null,
 });
 
 const server = http.createServer(
