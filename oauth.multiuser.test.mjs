@@ -62,13 +62,13 @@ test('authorization and refresh keep independent collector links', async () => {
   const {bridge} = fixture();
   const a = await grant(bridge,'owner-a');
   const b = await grant(bridge,'owner-b');
-  assert.equal(bridge.authenticate({headers:{authorization:'Bearer '+a.access_token}}).linkToken,'A'.repeat(43));
-  assert.equal(bridge.authenticate({headers:{authorization:'Bearer '+b.access_token}}).linkToken,'B'.repeat(43));
+  assert.equal(await bridge.authenticate({headers:{authorization:'Bearer '+a.access_token}}).linkToken,'A'.repeat(43));
+  assert.equal(await bridge.authenticate({headers:{authorization:'Bearer '+b.access_token}}).linkToken,'B'.repeat(43));
   const refresh = await call(bridge,'POST','/oauth/token',{form:{grant_type:'refresh_token',refresh_token:a.refresh_token,client_id:a.client_id,resource}});
   assert.equal(refresh.status,200);
   assert.notEqual(refresh.json.refresh_token,a.refresh_token);
-  assert.equal(bridge.authenticate({headers:{authorization:'Bearer '+refresh.json.access_token}}).linkToken,'A'.repeat(43));
-  assert.equal(bridge.authenticate({headers:{authorization:'Bearer '+b.access_token}}).linkToken,'B'.repeat(43));
+  assert.equal(await bridge.authenticate({headers:{authorization:'Bearer '+refresh.json.access_token}}).linkToken,'A'.repeat(43));
+  assert.equal(await bridge.authenticate({headers:{authorization:'Bearer '+b.access_token}}).linkToken,'B'.repeat(43));
   const replay = await call(bridge,'POST','/oauth/token',{form:{grant_type:'refresh_token',refresh_token:a.refresh_token,client_id:a.client_id,resource}});
   assert.equal(replay.status,400);
   const wrongResource = await call(bridge,'POST','/oauth/token',{form:{grant_type:'refresh_token',refresh_token:refresh.json.refresh_token,client_id:a.client_id,resource:'https://wrong.example.test/mcp'}});
@@ -82,7 +82,7 @@ test('expiry blocks refresh; in-memory state does not survive new instance', asy
   f.advance(31*24*60*60*1000);
   const expired = await call(f.bridge,'POST','/oauth/token',{form:{grant_type:'refresh_token',refresh_token:a.refresh_token,client_id:a.client_id,resource}});
   assert.equal(expired.status,400);
-  assert.equal(f.bridge.authenticate({headers:{authorization:'Bearer '+a.access_token}}),undefined);
+  assert.equal(await f.bridge.authenticate({headers:{authorization:'Bearer '+a.access_token}}),undefined);
   const fresh = fixture();
-  assert.equal(fresh.bridge.authenticate({headers:{authorization:'Bearer '+a.access_token}}),undefined);
+  assert.equal(await fresh.bridge.authenticate({headers:{authorization:'Bearer '+a.access_token}}),undefined);
 });
