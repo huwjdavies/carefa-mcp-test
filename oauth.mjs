@@ -4,6 +4,7 @@ const SCOPE = 'collection:read';
 const SESSION_MS = 10 * 60_000;
 const CODE_MS = 60_000;
 const TOKEN_MS = 15 * 60_000;
+const REFRESH_MS = 30 * 24 * 60 * 60_000;
 const MAX_ENTRIES = 1000;
 const random = () => randomBytes(32).toString('base64url');
 const hash = value => createHash('sha256').update(value).digest('base64url');
@@ -18,8 +19,8 @@ const safeHttps = value => {
   } catch { return false; }
 };
 
-// Single-process development implementation. A restart invalidates every session.
-// No refresh tokens: the collector signs in again after access-token expiration.
+// Development-only storage: rotating refresh tokens are supported, but process restarts
+// still invalidate sessions. Production requires a transactional durable store.
 export function createOAuthBridge({ publicUrl, appUrl, redirectUris, configured,
   exchangeCode, now = Date.now }) {
   if (!Array.isArray(redirectUris) || redirectUris.some(u => typeof u !== 'string' || !safeHttps(u))) {
@@ -27,18 +28,18 @@ export function createOAuthBridge({ publicUrl, appUrl, redirectUris, configured,
   }
   const issuer = publicUrl;
   const resource = `${issuer}/mcp`;
-  const clients = new Map(), pending = new Map(), codes = new Map(), tokens = new Map();
+  const clients = new Map(), pending = new Map(), codes = new Map(), tokens = new Map(), refreshTokens = new Map();
   // Stable public OAuth client for the allowlisted ChatGPT callback; no client secret.
   // A deterministic ID survives free-tier restarts without storing credentials.
   const fixedClientId = `carefa-chatgpt-${hash(`${issuer}|${redirectUris.join('|')}`).slice(0,32)}`;
   if (redirectUris.length) clients.set(fixedClientId, {
     client_id: fixedClientId, redirect_uris: [...redirectUris],
-    token_endpoint_auth_method: 'none', grant_types: ['authorization_code'], response_types: ['code']
+    token_endpoint_auth_method: 'none', grant_types: ['authorization_code', 'refresh_token'], response_types: ['code']
   });
   const ready = () => configured() && safeHttps(issuer) && new URL(issuer).origin === issuer &&
     safeHttps(appUrl) && redirectUris.length > 0;
   function prune() {
-    for (const map of [pending, codes, tokens]) {
+    for (const map of [pending, codes, tokens, refreshTokens]) {
       for (const [key, value] of map) if (value.expires <= now()) map.delete(key);
     }
   }
@@ -102,7 +103,7 @@ export function createOAuthBridge({ publicUrl, appUrl, redirectUris, configured,
       return json(res, 200, { issuer, authorization_endpoint: `${issuer}/oauth/authorize`,
         token_endpoint: `${issuer}/oauth/token`, registration_endpoint: `${issuer}/oauth/register`,
         revocation_endpoint: `${issuer}/oauth/revoke`, scopes_supported: [SCOPE],
-        response_types_supported: ['code'], grant_types_supported: ['authorization_code'],
+        response_types_supported: ['code'], grant_types_supported: ['authorization_code', 'refresh_token'],
         token_endpoint_auth_methods_supported: ['none'], code_challenge_methods_supported: ['S256'] });
     }
     if (req.method === 'POST' && path === '/oauth/register') {
@@ -216,7 +217,21 @@ export function createOAuthBridge({ publicUrl, appUrl, redirectUris, configured,
       if (path === '/oauth/revoke') {
         const key = hash(p.get('token') || '');
         if (tokens.get(key)?.client_id === client.client_id) tokens.delete(key);
+        if (refreshTokens.get(key)?.client_id === client.client_id) refreshTokens.delete(key);
         return json(res, 200, {});
+      }
+      if (p.get('grant_type') === 'refresh_token') {
+        const oldKey = hash(p.get('refresh_token') || '');
+        const session = refreshTokens.get(oldKey);
+        // Consume before any await: one-time rotating refresh credentials.
+        refreshTokens.delete(oldKey);
+        if (!session || session.client_id !== client.client_id || session.expires <= now() ||
+            p.get('resource') !== resource) return error(res, 400, 'invalid_grant');
+        const accessToken = random(), refreshToken = random();
+        tokens.set(hash(accessToken), { ...session, expires: now() + TOKEN_MS });
+        refreshTokens.set(hash(refreshToken), { ...session, expires: now() + REFRESH_MS });
+        return json(res, 200, { access_token: accessToken, refresh_token: refreshToken,
+          token_type: 'Bearer', expires_in: TOKEN_MS / 1000, scope: SCOPE });
       }
       if (p.get('grant_type') !== 'authorization_code') return error(res, 400, 'unsupported_grant_type');
       const key = hash(p.get('code') || '');
@@ -227,10 +242,11 @@ export function createOAuthBridge({ publicUrl, appUrl, redirectUris, configured,
           entry.resource !== p.get('resource') || !/^[A-Za-z0-9._~-]{43,128}$/.test(verifier) ||
           !equal(hash(verifier), entry.code_challenge)) return error(res, 400, 'invalid_grant');
       if (tokens.size >= MAX_ENTRIES) return error(res, 429, 'temporarily_unavailable');
-      const token = random();
-      tokens.set(hash(token), { linkToken: entry.linkToken, client_id: entry.client_id,
-        resource: entry.resource, scope: SCOPE, expires: now() + TOKEN_MS });
-      return json(res, 200, { access_token: token, token_type: 'Bearer',
+      const token = random(), refreshToken = random();
+      const grant = { linkToken: entry.linkToken, client_id: entry.client_id, resource: entry.resource, scope: SCOPE };
+      tokens.set(hash(token), { ...grant, expires: now() + TOKEN_MS });
+      refreshTokens.set(hash(refreshToken), { ...grant, expires: now() + REFRESH_MS });
+      return json(res, 200, { access_token: token, refresh_token: refreshToken, token_type: 'Bearer',
         expires_in: TOKEN_MS / 1000, scope: SCOPE });
     }
     return json(res, 405, { error: 'method_not_allowed' });
