@@ -224,9 +224,9 @@ export function createOAuthBridge({ publicUrl, appUrl, redirectUris, configured,
         const oldKey = hash(p.get('refresh_token') || '');
         const session = refreshTokens.get(oldKey);
         // Consume before any await: one-time rotating refresh credentials.
-        refreshTokens.delete(oldKey);
         if (!session || session.client_id !== client.client_id || session.expires <= now() ||
             p.get('resource') !== resource) return error(res, 400, 'invalid_grant');
+        refreshTokens.delete(oldKey);
         const accessToken = random(), refreshToken = random();
         tokens.set(hash(accessToken), { ...session, expires: now() + TOKEN_MS });
         refreshTokens.set(hash(refreshToken), { ...session, expires: now() + REFRESH_MS });
