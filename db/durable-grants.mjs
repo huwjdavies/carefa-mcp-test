@@ -1,6 +1,7 @@
 import { randomBytes, createHash } from 'node:crypto';
 import { createSessionStore } from './session-store.mjs';
 import { createSessionCrypto } from './session-crypto.mjs';
+import { issueTokenPair } from './transactional-issuance.mjs';
 
 const digest = value => createHash('sha256').update(value).digest('base64url');
 const random = () => randomBytes(32).toString('base64url');
@@ -23,13 +24,9 @@ export function createDurableGrants({ pool, encryptionKey, now = Date.now }) {
       const grantId = random();
       const payload = { linkToken, resource, scope };
       const accessToken = random(), refreshToken = random();
-      await store.put(record(accessToken, 'access', clientId, grantId, payload, now() + ACCESS_MS));
-      try {
-        await store.put(record(refreshToken, 'refresh', clientId, grantId, payload, now() + REFRESH_MS));
-      } catch (error) {
-        await store.revokeGrant(grantId, clientId);
-        throw error;
-      }
+      await issueTokenPair(pool,
+        record(accessToken, 'access', clientId, grantId, payload, now() + ACCESS_MS),
+        record(refreshToken, 'refresh', clientId, grantId, payload, now() + REFRESH_MS));
       return { access_token: accessToken, refresh_token: refreshToken,
         token_type: 'Bearer', expires_in: ACCESS_MS / 1000, scope };
     },
