@@ -1,0 +1,12 @@
+{
+  "name": "carefa-oauth-bridge",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test oauth.multiuser.test.mjs"
+  },
+  "dependencies": {
+    "pg": "^8.16.3"
+  }
+}
