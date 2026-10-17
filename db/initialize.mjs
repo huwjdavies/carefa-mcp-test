@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { createDurableGrants } from './durable-grants.mjs';
+import { createHandshakeStore } from './handshake-store.mjs';
 
 // Opt-in only. A configured deployment must use durable storage or fail to start.
 // No automatic fallback to ephemeral memory after database errors.
@@ -40,7 +41,7 @@ export async function initializeDurableGrants(env = process.env) {
     const grants = createDurableGrants({
       pool, encryptionKey: env.OAUTH_SESSION_ENCRYPTION_KEY
     });
-    return { grants, pool };
+    return { grants, handshakes: createHandshakeStore(pool, env.OAUTH_SESSION_ENCRYPTION_KEY), pool };
   } catch (error) {
     await pool.end();
     throw error;
