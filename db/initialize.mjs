@@ -4,7 +4,15 @@ import { createDurableGrants } from './durable-grants.mjs';
 // Opt-in only. A configured deployment must use durable storage or fail to start.
 // No automatic fallback to ephemeral memory after database errors.
 export async function initializeDurableGrants(env = process.env) {
-  if (env.OAUTH_STORAGE_MODE !== 'postgres') return null;
+  if (env.OAUTH_STORAGE_MODE !== 'postgres') {
+    if (env.OAUTH_STORAGE_MODE && env.OAUTH_STORAGE_MODE !== 'memory') {
+      throw new Error('Unsupported OAuth storage mode');
+    }
+    if (env.NODE_ENV === 'production') {
+      throw new Error('Production requires durable PostgreSQL OAuth storage');
+    }
+    return null;
+  }
   if (!env.DATABASE_URL || !env.OAUTH_SESSION_ENCRYPTION_KEY) {
     throw new Error('Postgres OAuth mode requires DATABASE_URL and OAUTH_SESSION_ENCRYPTION_KEY');
   }
