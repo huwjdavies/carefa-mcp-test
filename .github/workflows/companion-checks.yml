@@ -1,0 +1,44 @@
+name: CAREFA Companion V1 checks
+on:
+  push:
+    branches: [carefa-multiuser-hardening-20261017]
+  pull_request:
+    paths:
+      - "**/*.mjs"
+      - "integration/**"
+      - "package*.json"
+      - ".github/workflows/companion-checks.yml"
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: carefa_fixture_admin
+          POSTGRES_PASSWORD: disposable-fixture-only
+          POSTGRES_DB: carefa_companion_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U carefa_fixture_admin -d carefa_companion_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm test
+      - run: npm run test:postgres
+        env:
+          CAREFA_TEST_DATABASE_URL: postgres://carefa_fixture_admin:disposable-fixture-only@127.0.0.1:5432/carefa_companion_test
+          CAREFA_TEST_DISPOSABLE: "1"
+          OAUTH_SESSION_ENCRYPTION_KEY: BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=
+      - run: npm run check:integration
+      - name: JavaScript syntax
+        run: find . -path ./node_modules -prune -o -path ./.git -prune -o -name '*.mjs' -type f -print0 | xargs -0 -n1 node --check

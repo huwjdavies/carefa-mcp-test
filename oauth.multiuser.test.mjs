@@ -132,3 +132,14 @@ test('OAuth sign-in completes across bridge recreation with durable handshake ad
     code,client_id:client,redirect_uri:redirectUri,code_verifier:verifier,resource}});
   assert.equal(replay.status,400);
 });
+
+
+test('revocation covers every access and refresh token in one grant family, never another collector',async()=>{
+ const {bridge}=fixture(),a=await grant(bridge,'owner-a'),b=await grant(bridge,'owner-b');
+ const rotation=await call(bridge,'POST','/oauth/token',{form:{grant_type:'refresh_token',refresh_token:a.refresh_token,client_id:a.client_id,resource}});
+ assert.equal(rotation.status,200);
+ await call(bridge,'POST','/oauth/revoke',{form:{client_id:a.client_id,token:a.access_token}});
+ for(const token of [a.access_token,rotation.json.access_token])assert.equal(await bridge.authenticate({headers:{authorization:'Bearer '+token}}),undefined);
+ assert.equal((await call(bridge,'POST','/oauth/token',{form:{grant_type:'refresh_token',refresh_token:rotation.json.refresh_token,client_id:a.client_id,resource}})).status,400);
+ assert.ok(await bridge.authenticate({headers:{authorization:'Bearer '+b.access_token}}));
+});
