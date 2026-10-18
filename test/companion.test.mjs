@@ -229,3 +229,10 @@ test("Base44 adapter always supplies an owner filter and positional pagination, 
   assert.equal(calls[2][0].is_looking_for, true);
   await assert.rejects(repo.page("User", "a", { page: 0, limit: 100 }));
 });
+
+ test("MCP edge rejects oversized upstream pages", async () => {
+ const f = companionFixture();
+ const value = await f.reader.read(f.tokens.a, { section: "cards" });
+ value.data.items = Array.from({length: 101}, () => ({card_name: "fictional"}));
+ assert.throws(() => projectCompanionResult(value, "cards"));
+ });

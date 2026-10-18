@@ -1,6 +1,6 @@
 # Staged CAREFA integration — NOT APPLIED OR DEPLOYED
 
-Source inspected read-only from Base44 branch `oauth-account-isolation` (`6ad3726306ffdd7f3c4a8d38`) on 2026-10-19. GitHub runtime work stays on `carefa-multiuser-hardening-20261017`; its Render lab has auto-deploy off. No Base44 source has been changed by this assignment.
+Source inspected read-only from Base44 branch `oauth-account-isolation` (`6ad3726306ffdd7f3c4a8d38`) on 2026-10-18. GitHub runtime work stays on `carefa-multiuser-hardening-20261017`; its Render lab has auto-deploy off. No Base44 source has been changed by this assignment.
 
 ## UI integration
 

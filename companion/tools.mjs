@@ -45,6 +45,10 @@ const pick = (value, keys) =>
       return v === undefined ? [] : [[k, v]];
     }),
   );
+const items = (value) => {
+  if (!Array.isArray(value) || value.length > 100) throw Error("Invalid companion page");
+  return value;
+};
 const page = (value) => pick(value, ["page", "page_size", "total", "has_more"]);
 export function projectCompanionResult(value, section) {
   if (
@@ -61,14 +65,14 @@ export function projectCompanionResult(value, section) {
   if (section === "cards" || section === "wishlist")
     data = {
       ...data,
-      items: (d.items || []).map(projectCard),
+      items: items(d.items || []).map(projectCard),
       pagination: page(d.pagination),
       snapshot: false,
     };
   else if (section === "binders")
     data = {
       ...data,
-      items: (d.items || []).map((x) =>
+      items: items(d.items || []).map((x) =>
         pick(x, ["name", "theme", "capacity", "set_id"]),
       ),
       pagination: page(d.pagination),
@@ -77,7 +81,7 @@ export function projectCompanionResult(value, section) {
   else if (section === "achievements")
     data = {
       ...data,
-      items: (d.items || []).map((x) =>
+      items: items(d.items || []).map((x) =>
         pick(x, [
           "region",
           "generation",
@@ -143,14 +147,14 @@ export function projectCompanionResult(value, section) {
         "missing_total",
         "basis",
       ]),
-      missing_cards: d.missing_cards?.map(projectCard) ?? null,
+      missing_cards: d.missing_cards == null ? null : items(d.missing_cards).map(projectCard),
       pagination: page(d.pagination),
     };
   else
     data = {
       ...data,
-      basis: d.basis,
-      items: d.items?.map((x) =>
+      basis: scalar(d.basis),
+      items: items(d.items || []).map((x) =>
         pick(x, [
           "region",
           "name",
