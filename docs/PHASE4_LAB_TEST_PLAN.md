@@ -1,0 +1,34 @@
+# Phase 4 fictional data and direct-permission test plan
+
+Prepared only; no remote insertion, account creation, linking or disconnection has occurred.
+
+## Dataset
+
+`fixtures/isolated-collectors.mjs` is an offline deterministic factory, with no network client or executable seed command. Collector `lab-a`: 9 owned records / 9 copies, English Normal. Collector `lab-b`: 1,200 owned records / 2,400 copies, Japanese Holo. Card IDs, record fixture keys and set IDs are disjoint. Every card name starts FICTIONAL. There are no real Pokémon catalogue IDs, valuations, scores, achievements, emails, credentials, owner IDs or authentication records. Unknown canonical metrics must remain unavailable. These are deliberately synthetic printings; catalogue-dependent UI may show unavailable imagery/progress. Do not silently substitute real catalogue data.
+
+After separate isolated-account/data approval, each fictional account authenticates against the NEW app. An approved operator verifies app/backend ID and `auth.me()` in that session, privately records the mapping from fixture label to platform user ID, and inserts `insertionPayloads(label)` as that ordinary user into the reviewed UserCard schema. Base44 must assign ownership from that session; never submit created_by_id/user_id/owner from the fixture. `fixture_key` is an offline ledger key, omitted from insertion payloads. Review actual schema-required fields first: stop rather than inventing owner fields or widening permissions. Use bounded batches, record inserted IDs privately, count successful rows, and stop on partial/error responses; no blind retry duplicates. No service-role blanket import or production export. Seed only after confirming no automations can write to production or contact external services.
+
+Verify A has 9 records and 9 copies, B has 1,200 records and 2,400 copies. Counts of owned records and quantities are separate assertions. Existing in-memory security fixtures intentionally share printings to test owner filtering; this new dataset supplies stronger visual leakage markers without replacing those tests.
+
+## Platform permission acceptance gate (not executed)
+
+Only an explicitly approved isolated app/backend with disposable fictional accounts qualifies. The Base44 preview impersonation feature can save changes; never run this against production. Use ordinary non-admin A, B and anonymous sessions; service-role/admin behavior is not proof of user RLS. Inspect the effective deployed rules, including any additional broad allow rule (Base44 grants access when any rule matches).
+
+1. Establish a known-existing consent sentinel under A and another under B using a separately approved isolated fixture setup mechanism. V3 normally stores consent in PostgreSQL, so an empty legacy entity is expected; without sentinels, missing-row failures do not prove update/delete denial. If fixture creation requires admin bypass, keep it isolated and remove the fixture only with approved cleanup. Never temporarily relax RLS to seed it.
+2. In A's normal SDK, attempt legacy AICompanionConsent create with both permission values; update its own sentinel false/true, update B's sentinel, delete its own and B's sentinel. All mutations must be denied. Repeat as B and anonymous. Try forged ownership fields too. Read/list must expose only allowed owner rows (or reject anonymous). Verify sentinel existence with its owner before cross-owner tests.
+3. Repeat through the actual direct entity HTTP API used by that SDK version, bypassing the CAREFA interface completely. Derive the exact endpoint/method/schema from the approved SDK's requests or reference, not a guessed URL. Keep authentication headers local; do not paste HAR files, tokens or full responses into chat/logs. Exercise supported bulk mutation routes if advertised. Inspect both HTTP result and persisted state: an exception or non-2xx alone is insufficient if a partial write occurred. Record only operation, session label, status, denied/pass and unchanged-state result.
+4. Do the same for collection foreign-row reads and writes: A cannot read or mutate B's known row, B cannot read or mutate A's. Ordinary collector self-edit permissions may exist; V1 AI read-only does NOT imply the normal CAREFA owner cannot edit their own cards. With the AI bearer, only the curated read tool exists: no entity SDK or write tool access. Arbitrary owner, entity, action and field arguments must fail. Internal approval/withdrawal endpoints reject AI bearers and missing management authentication.
+5. Run old staged consent surfaces and obsolete callbacks; none may mint usable V1 tokens. Withdraw via the first-party settings flow; old access, refresh and approved/pending codes must fail after withdrawal commits. Re-enable the legacy boolean only through the approved negative fixture setup if necessary: it cannot restore access. Reconnect requires a new flow and explicit approval; B remains unchanged.
+6. Stop immediately if any unexpected mutation or foreign data appears. Keep ingress closed; record aggregate failure evidence. Do not repair live permissions or disconnect existing integrations. Retest only after a reviewed isolated fix.
+
+Actual Base44 RLS interpretation, admin bypass, direct routes and bulk semantics remain unverified. Static schema tests and mocked SDK tests are not this acceptance gate.
+
+## Two stages, different proof
+
+First: two isolated Base44 identities and two separately authorised ChatGPT identities use fictional data. This proves lab onboarding only. Follow `TWO_ACCOUNT_ONBOARDING_TEST.md` for consent denial, switching, protected reads, refresh, expiry, withdrawal and fresh reconnection, with explicit new-link AND withdrawal approvals.
+
+Later: compatibility with actual CAREFA production identities/collections needs a separately designed and approved read-only boundary. Lab identities are not production identities; never map by matching email or copy production data/credentials. Existing original/nine-card production accounts are not used by this Phase 4 plan. Do not claim their compatibility from simulated counts.
+
+## iPhone review
+
+The staged pages preserve CAREFA semantic navy/gold tokens, one-column max-width panels, explicit permission text, server-only status, safe cancellation, error alerts, and external-link protection. Phase 4 makes the permissions disclosure a 48px target and adds top/bottom safe-area spacing to approval. Local transpilation passes; CSS token resolution, contrast, browser layout, keyboard focus, VoiceOver, 200% text, narrow landscape, Safari/Home Screen session separation and actual return-to-ChatGPT remain acceptance checks. Check 320/375/390px widths for overflow, sticky navigation and notch overlap. Generic collector labels may not uniquely identify an account when username is absent: resolve this before approving a wrong-account-sensitive real test. Compilation is not Base44 or iPhone validation.

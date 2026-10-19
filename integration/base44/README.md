@@ -76,3 +76,7 @@ Exact set completion/missing cards require a complete canonical multilingual pri
 ## Release gate
 
 This package is reviewable code and an exact integration plan, not a claim of a deployed page or finished public onboarding. Keep the feature disabled until lifecycle additions, canonical adapters, privacy/consent disclosure, installation availability and two-account end-to-end tests are complete.
+
+## Phase 4 review
+
+See `docs/PHASE4_VERIFICATION_REPORT.md`, `docs/PHASE4_ENVIRONMENT_AND_COST.md`, `docs/PHASE4_LAB_TEST_PLAN.md` and `docs/PHASE4_DEPLOYMENT_APPROVAL.md`. Targets remain proposed/uncreated; no live publication. Phase 4 deployment pin supersedes the Phase 3 pin. Local compilation does not prove actual SDK/RLS or iPhone behavior. The new offline dataset must only be imported after isolated account/data approval, with ownership assigned by each authenticated fictional user's session. Do not use this package on existing legacy services.

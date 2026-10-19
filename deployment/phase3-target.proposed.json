@@ -1,7 +1,7 @@
 {
-  "status": "PROPOSAL ONLY — NOT APPROVED OR CREATED",
+  "status": "PROPOSAL ONLY \u2014 NOT APPROVED OR CREATED",
   "branch": "carefa-multiuser-hardening-20261017",
-  "commit": "9d2e2120c5fd60952e791d3b8909a5daad2c14c9",
+  "commit": "79146e45d9cdd89aa33090d1e36180cc50a1044d",
   "base44": {
     "name": "CAREFA Companion V1 Isolated Lab",
     "id": "NOT_CREATED",
@@ -10,7 +10,7 @@
   "render": {
     "name": "carefa-companion-phase3-lab",
     "id": "NOT_CREATED",
-    "workspace": "CAREFA Companion Isolated Lab — new zero-cost workspace if eligible",
+    "workspace": "CAREFA Companion Isolated Lab \u2014 new zero-cost workspace if eligible",
     "region": "frankfurt",
     "plan": "free",
     "autoDeploy": "no"
