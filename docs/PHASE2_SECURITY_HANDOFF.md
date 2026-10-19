@@ -1,5 +1,7 @@
 # Phase 2 — security, connections and onboarding
 
+Phase 3 continuation: see PHASE3_VERIFICATION_REPORT.md and PHASE3_CONSENT_AUDIT.md. These earlier notes describe the historical baseline; the opt-in generation authority supersedes the mutable-boolean release gate only in the complete isolated v3 package. Nothing is deployed.
+
 2026-10-19. Repository `huwjdavies/carefa-mcp-test`, branch `carefa-multiuser-hardening-20261017`. Continues Phase 1 commits `364773b` and `3cc15c4`; does not replace its collection reader. Initial Phase 2 implementation: `f8c98f68d16e189f51f962e1e8779e9f1cc30362`. Follow-up changes and final CI are visible in this branch's commit history.
 
 ## Implemented boundary

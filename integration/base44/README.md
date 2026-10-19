@@ -1,3 +1,18 @@
+# Phase 3 isolated integration — NOT DEPLOYED
+
+**Use this whole v3 package only in a separately approved NEW isolated Base44 app/backend. Do not apply its schema or legacy-surface replacements to live CAREFA.** Read docs/PHASE3_CONSENT_AUDIT.md, PHASE3_ENVIRONMENT_AUDIT.md and PHASE3_DEPLOYMENT_APPROVAL.md. They supersede the earlier v1/v2 lifecycle notes below.
+
+1. Stage the existing two protected pages, shared modules and data/approval/settings functions. Set the new target authority to bridge-postgres-v3; enable the Render Phase 3 flag alongside the existing two flags. The PostgreSQL initializer uses db/consent-generation-store.mjs. No Base44 consent lookup endpoint is needed for v3.
+2. Overlay isolation-only/src/ at matching frontend paths and isolation-only/base44/entities/AICompanionConsent.jsonc at its matching entity path. The four known legacy surfaces no longer mutate booleans; old approval transactions are not retargeted. The isolated legacy entity denies create/update/delete, including stale/direct SDK requests. Keep MCP entity writes disabled and the private metadata/approval functions out of tool inventories.
+3. Rebuild browser assets and verify runtime/direct-API RLS in the isolated backend before accepting any collector test. Grep the resulting source again for AICompanionConsent create/update/delete and old carefaAiLink calls; platform enforcement is required in addition to static checks.
+4. New explicit approval writes consent within PostgreSQL, not Base44 boolean records. Withdraw all V1 ChatGPT access calls the first-party withdraw action, derives the owner from auth.me(), increments generation and revokes that owner's V1 links/codes. A fresh flow is mandatory to reconnect. The UI does not revoke production legacy integrations.
+5. Register Home/Profile → My AI Assistants, then the in-page Add My AI Assistant → Choose ChatGPT control. Existing safe-area/nav styling stays. The real listing stays unavailable until installation is verified. Approve/Deny show the current CAREFA identity; wrong-account flows must cancel/start again. A protected read alone records verification.
+6. Runtime app IDs, origins, secret separation, new database/roles/TLS, exact ChatGPT callback and actual frontend login return behavior remain target-specific release gates. No credentials or real records are copied by this package. A code branch is not an isolated backend.
+
+Current tests compile this package and execute staged entrypoints with fictional adapters; they do not prove Base44 SDK behavior, platform RLS or iPhone visual layout. Follow the separately approved deployment sequence and rollback plan; do not copy only the UI callbacks and omit the deny-CRUD schema/terminal authority.
+
+---
+
 # Phase 2 integration update — STAGED ONLY, 2026-10-19
 
 Phase 2 continues the existing reader/UI with a PostgreSQL link authority to remove the unproven Base44 code-redemption race. Read `docs/PHASE2_SECURITY_HANDOFF.md` and `docs/TWO_ACCOUNT_ONBOARDING_TEST.md` before applying anything. Nothing below authorises deployment or configuration changes.

@@ -1,7 +1,7 @@
 {
   "status": "PROPOSAL ONLY — NOT APPROVED OR CREATED",
   "branch": "carefa-multiuser-hardening-20261017",
-  "commit": "PENDING_REVIEWED_COMMIT",
+  "commit": "9d2e2120c5fd60952e791d3b8909a5daad2c14c9",
   "base44": {
     "name": "CAREFA Companion V1 Isolated Lab",
     "id": "NOT_CREATED",

@@ -31,3 +31,8 @@ Official user documentation describes plugins on web/desktop/mobile, with mobile
 - https://learn.chatgpt.com/docs/pricing (not sufficient to establish CAREFA-specific eligibility)
 
 These findings are documentation research, not a completed publication, account-eligibility test or successful fresh ChatGPT onboarding session.
+
+
+## Phase 3 recheck — 2026-10-19
+
+The authentication, submission and user plugin documentation above were fetched again in Phase 3. No supported automatic install/account-link shortcut or usable CAREFA public listing was established. The implementation retains exact redirect allowlists, issuer identification, PKCE/resource checks and tool OAuth declarations. Compatibility is prepared, not proven through a fresh ChatGPT session. Corporate/workspace-domain identity requirements may require publisher review; do not add email to collecting tools to guess at compliance. Confirm any private OAuth-only identity endpoint requirement separately with OpenAI before public submission. The no-email collection-tool boundary stays intact.

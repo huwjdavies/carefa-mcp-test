@@ -1,3 +1,20 @@
+# Phase 3 test gate — still NOT RUN
+
+Read PHASE3_DEPLOYMENT_APPROVAL.md and PHASE3_ENVIRONMENT_AUDIT.md first. No existing isolated backend was proved. Do not run the steps below until the exact new target and deployment are approved and verified. New isolated Base44 accounts have different identities/data from production; do not equate them by email. An owner-approved private snapshot copy or a separately approved genuinely read-only production integration is a prerequisite for testing the existing nine-card/larger-collection datasets. Fictional and snapshot tests are distinct from genuine live production-account onboarding.
+
+Phase 3 additions to the procedure:
+
+- Approve creation/linking separately from intentional test disconnection/withdrawal. Record which named NEW V1 links may be withdrawn; exclude all existing integrations.
+- Before real linking, use a fictional ordinary collector to verify direct AICompanionConsent create/update/delete requests are denied in the isolated backend. Confirm every old consent surface is replaced and all active endpoints use bridge-postgres-v3. Attempting an old schema/API response must fail closed.
+- Test full consent withdrawal with one active A link plus an A pending approval/code. All old A reads, refresh credentials and codes must fail. B must remain usable. Merely turning a legacy boolean on cannot reconnect A.
+- Start an entirely fresh A flow and explicitly approve read-only access. Require correct A fingerprint/count and new verification only after a protected read; retry ALL old tokens/codes afterward and require continued rejection.
+- During approved fictional test sessions, race refresh/approval with withdrawal. Do not manipulate production timestamps or credentials. For genuine owners, carry out only the specific approved test operations and log counts/fingerprints/statuses, never card contents or secrets.
+- Confirm the actual installation route works on each owner's ChatGPT account/iPhone without asking the collector for MCP URLs/API keys/developer setup. A custom development-server experiment is not proof of ordinary public installability.
+
+The original account-owner steps below remain the detailed sequence after these gates pass.
+
+---
+
 # Controlled two-account onboarding — NOT RUN
 
 No new live linking, disconnect, refresh experiment, expiry manipulation or collection mutation was performed in Phase 2. The Phase 1 nine-card summary is historical evidence of one existing authenticated connection only.
