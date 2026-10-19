@@ -91,6 +91,11 @@ export function lifecycleFixture({ getConsent } = {}) {
         .filter((r) => r.user_id === owner)
         .map((r) => ({ ...r }));
     },
+    async failOwnLink(owner, id) {
+      const row = links.get(id);
+      if (row?.user_id === owner && row.status === "active")
+        row.status = "failed";
+    },
     async revokeOwnLink(owner, id) {
       const r = links.get(id);
       if (r?.user_id !== owner) return false;

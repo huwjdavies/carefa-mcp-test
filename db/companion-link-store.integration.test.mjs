@@ -455,3 +455,79 @@ integration(
     );
   },
 );
+
+integration(
+  "PostgreSQL: receipt/revoke races, code expiry, immutable identity and stored read-only constraints",
+  async (t) => {
+    const pool = await database(t),
+      store = createCompanionLinkStore(pool),
+      owner = "receipt-" + opaque();
+    t.after(async () => {
+      try {
+        await pool.query("DELETE FROM companion_links WHERE owner_id=$1", [
+          owner,
+        ]);
+      } finally {
+        await pool.end();
+      }
+    });
+    const service = createCompanionLinkService({
+      store,
+      getConsent: async (user) => ({
+        created_by_id: user,
+        provider: "ChatGPT",
+        permission_granted: true,
+        consent_version: "2",
+      }),
+      issuer,
+    });
+    async function approve() {
+      const cb = callback(),
+        p = await service.begin(owner, cb),
+        a = await service.approve(owner, p.connection_id);
+      return {
+        id: p.connection_id,
+        cb,
+        code: new URL(a.redirect_url).searchParams.get("code"),
+      };
+    }
+    const expired = await approve();
+    const row = (
+      await pool.query(
+        "SELECT expires_at,approved_at FROM companion_links WHERE id=$1",
+        [expired.id],
+      )
+    ).rows[0];
+    assert.ok(row.expires_at - row.approved_at <= 60000);
+    await pool.query(
+      "UPDATE companion_links SET expires_at=now()-interval '1 second' WHERE id=$1",
+      [expired.id],
+    );
+    await assert.rejects(service.exchangeCode(expired.code, expired.cb));
+    for (let run = 0; run < 6; run++) {
+      const p = await approve(),
+        token = await service.exchangeCode(p.code, p.cb);
+      await service.verifiedRead(token, fingerprint("a"));
+      await assert.rejects(service.verifiedRead(token, fingerprint("b")));
+      await assert.rejects(
+        pool.query(
+          "UPDATE companion_links SET scope='collection:write' WHERE id=$1",
+          [p.id],
+        ),
+      );
+      await Promise.allSettled([
+        service.verifiedRead(token, fingerprint("a")),
+        service.disconnect(owner, p.id),
+      ]);
+      await assert.rejects(service.resolve(token));
+      await assert.rejects(service.verifiedRead(token, fingerprint("a")));
+    }
+    const p = await approve(),
+      token = await service.exchangeCode(p.code, p.cb);
+    await pool.query(
+      "UPDATE companion_links SET access_expires_at=now()-interval '1 second' WHERE id=$1",
+      [p.id],
+    );
+    assert.equal(await service.validate(token), false);
+  },
+);

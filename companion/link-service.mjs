@@ -61,7 +61,15 @@ export function createCompanionLinkService({
       link.consent_version !== "2"
     )
       reject(401, "invalid_token");
-    await consent(link.user_id);
+    try {
+      await consent(link.user_id);
+    } catch (error) {
+      // An observed withdrawal is terminal for this link. Later consent cannot
+      // resurrect the old bearer/refresh family; an outage does not revoke it.
+      if ([401, 403].includes(error.status))
+        await store.revokeOwnLink(link.user_id, link.id);
+      throw error;
+    }
     return link;
   }
   return {
@@ -125,7 +133,9 @@ export function createCompanionLinkService({
       try {
         await consent(link.user_id);
       } catch (e) {
-        await store.revokeOwnLink(link.user_id, link.id);
+        if ([401, 403].includes(e.status))
+          await store.revokeOwnLink(link.user_id, link.id);
+        else await store.failOwnLink(link.user_id, link.id);
         throw e;
       }
       return token;

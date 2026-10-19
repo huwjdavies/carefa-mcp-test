@@ -111,7 +111,7 @@ test("callback restrictions and private management API reject untrusted input an
   );
   assert.throws(
     () => createCarefaServer({ env: { CAREFA_COMPANION_PHASE2: "enabled" } }),
-    /transactional/,
+    /requires/,
   );
 });
 test("consent transport fails closed on outages, foreign owners and redirects; requests contain no collection", async () => {
@@ -153,4 +153,41 @@ test("consent withdrawal at redemption consumes and revokes the flow instead of 
   assert.equal(f.links.get(p.connection_id).status, "revoked");
   f.consents.get("a").permission_granted = true;
   await assert.rejects(f.service.exchangeCode(code, f.callback));
+});
+
+test("consent service outage at redemption records Connection failed and cannot later replay", async () => {
+  let outage = false;
+  const f = lifecycleFixture({
+    getConsent: async (owner) => {
+      if (outage) throw Error("outage");
+      return {
+        created_by_id: owner,
+        provider: "ChatGPT",
+        permission_granted: true,
+        consent_version: "2",
+      };
+    },
+  });
+  const p = await f.service.begin("a", f.callback),
+    a = await f.service.approve("a", p.connection_id),
+    code = new URL(a.redirect_url).searchParams.get("code");
+  outage = true;
+  await assert.rejects(f.service.exchangeCode(code, f.callback));
+  outage = false;
+  assert.equal(
+    connectionView({ ...(await f.service.status("a")) }).status,
+    "connection_failed",
+  );
+  await assert.rejects(f.service.exchangeCode(code, f.callback));
+});
+
+test("observed consent withdrawal permanently invalidates old credentials even after consent is granted again", async () => {
+  const f = lifecycleFixture(),
+    a = await f.activate("a");
+  f.consents.get("a").permission_granted = false;
+  assert.equal(await f.service.validate(a.token), false);
+  f.consents.get("a").permission_granted = true;
+  assert.equal(await f.service.validate(a.token), false);
+  const fresh = await f.activate("a");
+  assert.equal(await f.service.validate(fresh.token), true);
 });

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import {
   Bot,
@@ -41,7 +41,9 @@ export default function MyAiAssistants({ api = defaultApi }) {
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [confirm, setConfirm] = useState(false);
+  const requestVersion = useRef(0);
   const refresh = useCallback(async () => {
+    const version = ++requestVersion.current;
     setBusy(true);
     setError("");
     try {
@@ -52,16 +54,27 @@ export default function MyAiAssistants({ api = defaultApi }) {
         !labels[result.status]
       )
         throw Error("Invalid status");
-      setState(result);
+      if (version === requestVersion.current) setState(result);
     } catch {
+      if (version !== requestVersion.current) return;
       setState(null);
       setError("We could not check your connection. Please try again.");
     } finally {
-      setBusy(false);
+      if (version === requestVersion.current) setBusy(false);
     }
   }, [api]);
   useEffect(() => {
     refresh();
+    const visible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", visible);
+    return () => {
+      ++requestVersion.current;
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", visible);
+    };
   }, [refresh]);
   const disconnect = async () => {
     if (!state?.connection_id) return;
@@ -125,7 +138,7 @@ export default function MyAiAssistants({ api = defaultApi }) {
                     : "Connection unavailable"}
               </p>
             </div>
-            {state?.status === "connected" && (
+            {!busy && state?.status === "connected" && (
               <CheckCircle2
                 className="text-primary"
                 aria-label="Connection verified"
@@ -233,7 +246,7 @@ export default function MyAiAssistants({ api = defaultApi }) {
             disabled={busy}
             className="min-h-12 w-full rounded-xl border border-border text-sm"
           >
-            Disconnect CAREFA access
+            Disconnect this CAREFA connection
           </button>
         )}
         {confirm && (
@@ -247,8 +260,8 @@ export default function MyAiAssistants({ api = defaultApi }) {
               Disconnect ChatGPT?
             </h2>
             <p className="text-sm text-muted-foreground mt-2">
-              This stops future CAREFA reads. It does not delete information
-              already shared with ChatGPT.
+              This stops future CAREFA reads through this connection. It does
+              not delete information already shared with ChatGPT.
             </p>
             <div className="flex gap-3 mt-4">
               <button

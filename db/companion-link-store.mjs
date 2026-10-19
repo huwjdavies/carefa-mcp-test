@@ -32,7 +32,7 @@ export function createCompanionLinkStore(pool) {
     },
     async approve({ id, owner, codeHash }) {
       const r = await pool.query(
-        `UPDATE companion_links SET state='approved',code_hash=$3,approved_at=now()
+        `UPDATE companion_links SET state='approved',code_hash=$3,approved_at=now(),expires_at=LEAST(expires_at,now()+interval '60 seconds')
         WHERE id=$1 AND owner_id=$2 AND state='pending' AND expires_at>now() RETURNING callback_url`,
         [id, owner, codeHash],
       );
@@ -82,6 +82,12 @@ export function createCompanionLinkStore(pool) {
       );
       if (r.rows.length > 100) throw Error("Connection limit requires review");
       return r.rows.map(view);
+    },
+    async failOwnLink(owner, id) {
+      await pool.query(
+        "UPDATE companion_links SET state='failed' WHERE owner_id=$1 AND id=$2 AND state='active'",
+        [owner, id],
+      );
     },
     async revokeOwnLink(owner, id) {
       const r = await pool.query(

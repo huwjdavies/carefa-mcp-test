@@ -5,6 +5,7 @@ on:
   pull_request:
     paths:
       - "**/*.mjs"
+      - "**/*.sql"
       - "integration/**"
       - "package*.json"
       - ".github/workflows/companion-checks.yml"

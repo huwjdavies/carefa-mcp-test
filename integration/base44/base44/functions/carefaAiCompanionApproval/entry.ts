@@ -53,7 +53,7 @@ export default async function (req: Request): Promise<Response> {
         provider: "ChatGPT",
         permission_granted: true,
         consent_version: "2",
-        connection_status: "authorised_unverified",
+        connection_status: "pending_provider",
       });
     }
     const result = await companionBridge({ ...input, owner: user.id });

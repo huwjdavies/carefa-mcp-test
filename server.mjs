@@ -112,6 +112,22 @@ export function createCarefaServer({
     },
   ];
   if (env.CAREFA_COMPANION_V1 === "enabled") TOOLS.push(companionTool);
+  if (env.CAREFA_COMPANION_PHASE2 === "enabled") {
+    if (env.CAREFA_COMPANION_V1 !== "enabled")
+      throw Error("Phase 2 requires the read-only companion tool");
+    // New transactional links are not legacy Base44 AiAccessLinks. Advertise only
+    // tools implemented against the new authority; legacy deployments stay intact.
+    const supported = new Set([
+      "carefa_demo_collection",
+      "carefa_connection_test",
+      "carefa_companion_read",
+    ]);
+    TOOLS.splice(
+      0,
+      TOOLS.length,
+      ...TOOLS.filter((tool) => supported.has(tool.name)),
+    );
+  }
   for (const tool of TOOLS) {
     tool.annotations = {
       readOnlyHint: true,
@@ -722,6 +738,10 @@ export function createCarefaServer({
   )
     throw Error(
       "Phase 2 requires transactional storage and a trusted consent adapter",
+    );
+  if (phase2 && env.CAREFA_COMPANION_INTERNAL_SECRET === BRIDGE_SECRET)
+    throw Error(
+      "Phase 2 management secret must differ from the legacy bridge secret",
     );
   const internalApi = phase2
     ? createCompanionInternalApi({

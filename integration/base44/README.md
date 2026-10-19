@@ -1,3 +1,22 @@
+# Phase 2 integration update — STAGED ONLY, 2026-10-19
+
+Phase 2 continues the existing reader/UI with a PostgreSQL link authority to remove the unproven Base44 code-redemption race. Read `docs/PHASE2_SECURITY_HANDOFF.md` and `docs/TWO_ACCOUNT_ONBOARDING_TEST.md` before applying anything. Nothing below authorises deployment or configuration changes.
+
+## Phase 2 files and configuration
+
+- Apply `db/companion-schema.sql` only to the separately approved OAuth database target. The new initializer only checks for this table; it does not migrate it.
+- Copy `companion/reader.mjs`, `base44-repository.mjs`, `connection-controller.mjs`, `connections.mjs` into `base44/shared/companion/`, together with the staged `bridge-api.ts`. Existing shared `aiLink.ts` and `collectorFingerprint.ts` remain necessary; fingerprint secret is required but must never enter client code.
+- Stage all four functions from this package: carefaAiCompanion, carefaAiCompanionConnections, carefaAiCompanionApproval and carefaAiCompanionConsent.
+- Register `MyAiAssistants.jsx` at protected `/my-ai-assistants` as previously described. Register `AiCompanionApproval.jsx` at protected `/AiCompanionApproval`, preserving the complete cb query through CAREFA login. Add the Add My AI Assistant entry button. Existing legacy AiLink/OAuthConsent pages and integrations stay intact.
+- After approval ONLY: Render requires durable OAuth storage, CAREFA_COMPANION_V1=enabled, CAREFA_COMPANION_PHASE2=enabled, CAREFA_COMPANION_FUNCTION_URL, CAREFA_COMPANION_CONSENT_FUNCTION_URL and a dedicated CAREFA_COMPANION_INTERNAL_SECRET, distinct from RENDER_BRIDGE_SECRET. Preserve exact actual allowlisted ChatGPT redirects; do not copy examples into live settings. The startup path assembles the new lifecycle only when explicitly enabled.
+- After approval ONLY: Base44 needs CAREFA_COMPANION_LINK_AUTHORITY=bridge-postgres-v2, CAREFA_COMPANION_BRIDGE_ORIGIN (exact approved HTTPS issuer), the same dedicated internal secret, the existing data-bridge credential, correct CAREFA_PUBLIC_ORIGIN and account-fingerprint secret. Keep CHATGPT_COMPANION_PUBLIC_READY false and listing URL absent until actual installation is verified. Render controls the new authority's listing/status view.
+- Never enable this new authority over a service holding legacy connections. Its new read tokens intentionally resolve only through PostgreSQL. In Phase 2, legacy summary/cards/count tools are not advertised; existing legacy deployments stay unchanged.
+- The explicit approval function creates a version-2 consent record through the authenticated user's SDK, with pending_provider (the inspected schema's existing enum), not Connected. Confirm platform-generated created_by_id and consent RLS in the real isolated preview before enabling. All withdrawal paths must invoke bridge disconnect; do not leave a false→true legacy boolean path that can bypass a terminal revocation event.
+
+The old Phase 1 notes below explain the initial staged plan. **Do not also apply the legacy AiAccessLink schema/lifecycle plan when using the Phase 2 PostgreSQL authority.** Keep existing AiAccessLinks untouched. No paid resources, automatic deployments or public availability are implied.
+
+---
+
 # Staged CAREFA integration — NOT APPLIED OR DEPLOYED
 
 Source inspected read-only from Base44 branch `oauth-account-isolation` (`6ad3726306ffdd7f3c4a8d38`) on 2026-10-18. GitHub runtime work stays on `carefa-multiuser-hardening-20261017`; its Render lab has auto-deploy off. No Base44 source has been changed by this assignment.

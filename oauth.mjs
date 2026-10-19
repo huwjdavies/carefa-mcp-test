@@ -454,7 +454,7 @@ export function createOAuthBridge({
         if (validateLink && !(await validateLink(session.linkToken)))
           return error(res, 400, "invalid_grant");
         // Recheck after asynchronous validation: another request may revoke or rotate it.
-        if (refreshTokens.get(oldKey) !== session)
+        if (refreshTokens.get(oldKey) !== session || session.consumed)
           return error(res, 400, "invalid_grant");
         session.consumed = true;
         const accessToken = random(),

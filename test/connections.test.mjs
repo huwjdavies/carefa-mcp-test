@@ -105,3 +105,30 @@ test("first-party management never accepts AI-supplied owner selection or a fore
   await controller("a", { action: "disconnect", connection_id: "a-link" });
   assert.deepEqual(revoked, [["a", "a-link"]]);
 });
+
+test("all requested connection states are truthful, including expired and failed flows", () => {
+  const now = Date.now(),
+    future = new Date(now + 60000).toISOString();
+  const pending = { ...link, status: "pending", expires_at: future };
+  const view = (links) => connectionView({ links, consent, now });
+  assert.equal(connectionView({ links: [], now }).status, "not_connected");
+  assert.equal(view([pending]).status, "awaiting_authorisation");
+  assert.equal(
+    view([{ ...pending, status: "approved" }]).status,
+    "awaiting_verification",
+  );
+  assert.equal(
+    view([{ ...link, access_expires_at: new Date(0).toISOString() }]).status,
+    "expired",
+  );
+  assert.equal(view([{ ...link, status: "revoked" }]).status, "disconnected");
+  assert.equal(
+    view([{ ...link, status: "failed" }]).status,
+    "connection_failed",
+  );
+  assert.notEqual(
+    view([{ ...link, client_verified_at: future }]).status,
+    "connected",
+  );
+  assert.equal(view([link]).connection_id, link.id);
+});

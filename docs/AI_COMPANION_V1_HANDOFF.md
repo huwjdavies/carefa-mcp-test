@@ -1,5 +1,7 @@
 # AI Companion V1 — verification handoff
 
+Phase 2 continuation: see [PHASE2_SECURITY_HANDOFF.md](PHASE2_SECURITY_HANDOFF.md). This document records the Phase 1 baseline; its lifecycle blockers are partly addressed by the subsequent opt-in PostgreSQL implementation. Neither phase is deployed.
+
 Date: 2026-10-18. Repository: huwjdavies/carefa-mcp-test. Development branch: carefa-multiuser-hardening-20261017. Implementation commit: 364773b04734e267e48d594a269c70caede1f15b. Follow-up commit adds bounded edge projection and this report.
 
 ## What existed
