@@ -25,6 +25,11 @@ export function validateIsolatedTarget(m) {
     if (forbidden[kind].includes(m[kind]?.id))
       errors.push(kind + " existing/unverified target forbidden");
   }
+  if (m.render?.autoDeploy !== "no") errors.push("Automatic deployment must remain off");
+  if (m.render?.plan !== "free" || m.postgres?.plan !== "free")
+    errors.push("Only explicitly verified free plans are permitted by this proposal");
+  for (const flag of ["CAREFA_COMPANION_V1", "CAREFA_COMPANION_PHASE2", "CAREFA_COMPANION_PHASE3"])
+    if (m.flags?.[flag] !== "enabled") errors.push(flag + " must be enabled");
   if (m.postgres?.databaseName !== "carefa_companion_phase3")
     errors.push("Exact isolated database name required");
   for (const key of [

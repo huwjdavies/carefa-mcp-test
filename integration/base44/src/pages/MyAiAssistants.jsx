@@ -243,7 +243,7 @@ export default function MyAiAssistants({ api = defaultApi }) {
           </p>
         </section>
         <details className="rounded-2xl border border-border bg-card p-4">
-          <summary className="min-h-8 font-bold cursor-pointer">
+          <summary className="min-h-12 flex items-center font-bold cursor-pointer">
             What your AI can read
           </summary>
           <ul className="mt-3 space-y-2 text-sm text-muted-foreground list-disc pl-5">

@@ -96,9 +96,10 @@ test("deployment preflight refuses unknown IDs, existing unverified targets, mis
     ...proposal,
     commit: "a".repeat(40),
     base44: { id: "fictional-separate-app" },
-    render: { id: "fictional-new-service" },
+    render: { id: "fictional-new-service", plan: "free", autoDeploy: "no" },
     postgres: {
       id: "fictional-new-database",
+      plan: "free",
       databaseName: "carefa_companion_phase3",
     },
     independentBackendVerified: true,
@@ -120,4 +121,14 @@ test("deployment preflight refuses unknown IDs, existing unverified targets, mis
     validateIsolatedTarget({ ...isolated, zeroAdditionalCostVerified: false })
       .length > 0,
   );
+});
+
+test("approval preflight rejects partial security flags and implicit paid or auto-deploy targets", async () => {
+  const m = JSON.parse(await readFile(new URL("../deployment/phase3-target.proposed.json", import.meta.url), "utf8"));
+  for (const flag of ["CAREFA_COMPANION_V1", "CAREFA_COMPANION_PHASE2"]) {
+    const errors = validateIsolatedTarget({...m, flags:{...m.flags,[flag]:"disabled"}});
+    assert.ok(errors.some(e=>e.includes(flag)));
+  }
+  assert.ok(validateIsolatedTarget({...m,render:{...m.render,autoDeploy:"yes"}}).some(e=>e.includes("Automatic")));
+  assert.ok(validateIsolatedTarget({...m,postgres:{...m.postgres,plan:"0.1c-256mb"}}).some(e=>e.includes("free plans")));
 });

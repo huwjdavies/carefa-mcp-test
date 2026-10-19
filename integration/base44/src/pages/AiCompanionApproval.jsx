@@ -63,7 +63,8 @@ export default function AiCompanionApproval() {
     }
   };
   return (
-    <main className="min-h-screen bg-background text-foreground px-4 pt-8 pb-28">
+    <main className="min-h-screen bg-background text-foreground px-4 pt-8 pb-28"
+      style={{ paddingTop: "calc(2rem + env(safe-area-inset-top))", paddingBottom: "calc(7rem + env(safe-area-inset-bottom))" }}>
       <section className="carefa-luxe-panel bg-card border border-primary/40 rounded-3xl p-5 max-w-lg mx-auto">
         <p className="text-primary text-xs font-bold uppercase tracking-widest">
           CAREFA AI Companion
