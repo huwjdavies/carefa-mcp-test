@@ -230,9 +230,24 @@ test("Base44 adapter always supplies an owner filter and positional pagination, 
   await assert.rejects(repo.page("User", "a", { page: 0, limit: 100 }));
 });
 
- test("MCP edge rejects oversized upstream pages", async () => {
- const f = companionFixture();
- const value = await f.reader.read(f.tokens.a, { section: "cards" });
- value.data.items = Array.from({length: 101}, () => ({card_name: "fictional"}));
- assert.throws(() => projectCompanionResult(value, "cards"));
- });
+test("MCP edge rejects oversized upstream pages", async () => {
+  const f = companionFixture();
+  const value = await f.reader.read(f.tokens.a, { section: "cards" });
+  value.data.items = Array.from({ length: 101 }, () => ({
+    card_name: "fictional",
+  }));
+  assert.throws(() => projectCompanionResult(value, "cards"));
+});
+
+test("binder metadata never claims to contain the collectors actual binder card placements", async () => {
+  const f = companionFixture(),
+    value = await f.reader.read(f.tokens.a, { section: "binders" }),
+    edge = projectCompanionResult(value, "binders");
+  assert.equal(edge.data.contents_status, "unavailable");
+  assert.equal(
+    edge.data.contents_reason,
+    "canonical_binder_membership_adapter_required",
+  );
+  assert.equal(edge.data.items[0].theme, "Fire");
+  assert.equal(edge.data.items[0].cards, undefined);
+});

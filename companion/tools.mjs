@@ -46,7 +46,8 @@ const pick = (value, keys) =>
     }),
   );
 const items = (value) => {
-  if (!Array.isArray(value) || value.length > 100) throw Error("Invalid companion page");
+  if (!Array.isArray(value) || value.length > 100)
+    throw Error("Invalid companion page");
   return value;
 };
 const page = (value) => pick(value, ["page", "page_size", "total", "has_more"]);
@@ -72,6 +73,7 @@ export function projectCompanionResult(value, section) {
   else if (section === "binders")
     data = {
       ...data,
+      ...pick(d, ["contents_status", "contents_reason"]),
       items: items(d.items || []).map((x) =>
         pick(x, ["name", "theme", "capacity", "set_id"]),
       ),
@@ -147,7 +149,10 @@ export function projectCompanionResult(value, section) {
         "missing_total",
         "basis",
       ]),
-      missing_cards: d.missing_cards == null ? null : items(d.missing_cards).map(projectCard),
+      missing_cards:
+        d.missing_cards == null
+          ? null
+          : items(d.missing_cards).map(projectCard),
       pagination: page(d.pagination),
     };
   else

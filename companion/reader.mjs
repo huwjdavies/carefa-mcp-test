@@ -206,14 +206,16 @@ export function createCompanionReader({
         );
       else if (args.section === "wishlist")
         data = await pageData("wishlist", owner, args.page, projectCard);
-      else if (args.section === "binders")
+      else if (args.section === "binders") {
         data = await pageData("binders", owner, args.page, (row) => ({
           name: text(row.name),
           theme: text(row.theme),
           capacity: number(row.capacity),
           set_id: text(row.set_id),
         }));
-      else if (args.section === "achievements")
+        data.contents_status = "unavailable";
+        data.contents_reason = "canonical_binder_membership_adapter_required";
+      } else if (args.section === "achievements")
         data = await pageData("badges", owner, args.page, (row) => ({
           region: text(row.region),
           generation: number(row.gen),

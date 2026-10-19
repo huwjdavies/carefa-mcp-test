@@ -92,7 +92,7 @@ export default function MyAiAssistants({ api = defaultApi }) {
       await refresh();
     } catch {
       setError(
-        "We could not disconnect. Your access status has not been changed here.",
+        "We could not confirm the change. Check your connection status before trying again.",
       );
       setBusy(false);
     }
@@ -128,7 +128,25 @@ export default function MyAiAssistants({ api = defaultApi }) {
         </p>
       </header>
       <main className="max-w-lg mx-auto px-4 space-y-4">
-        <section className="carefa-luxe-panel rounded-3xl border border-primary/40 bg-card p-5">
+        <details className="carefa-luxe-panel rounded-2xl border border-border bg-card p-4">
+          <summary className="min-h-12 flex items-center font-bold cursor-pointer">
+            Add My AI Assistant
+          </summary>
+          <a
+            href="#chatgpt-connection"
+            className="min-h-12 flex items-center text-primary"
+          >
+            Choose ChatGPT
+          </a>
+          <p className="text-xs text-muted-foreground">
+            Continue below to approve read-only access. Choosing an assistant
+            does not connect it.
+          </p>
+        </details>
+        <section
+          id="chatgpt-connection"
+          className="carefa-luxe-panel rounded-3xl border border-primary/40 bg-card p-5"
+        >
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center">
               <Bot className="text-primary" size={26} />
@@ -271,8 +289,10 @@ export default function MyAiAssistants({ api = defaultApi }) {
               Disconnect ChatGPT?
             </h2>
             <p className="text-sm text-muted-foreground mt-2">
-              This stops future CAREFA reads through this connection. It does
-              not delete information already shared with ChatGPT.
+              {state?.terminal_consent
+                ? "This revokes all V1 ChatGPT links and pending approvals for this CAREFA account. A completely new authorisation is required to reconnect."
+                : "This stops future CAREFA reads through this connection."}{" "}
+              Information already shared with ChatGPT is not deleted.
             </p>
             <div className="flex gap-3 mt-4">
               <button
