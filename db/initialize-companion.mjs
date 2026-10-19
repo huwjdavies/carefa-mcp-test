@@ -1,3 +1,4 @@
+import { createConsentGenerationStore } from "./consent-generation-store.mjs";
 import { createCompanionLinkStore } from "./companion-link-store.mjs";
 import { createCompanionLinkService } from "../companion/link-service.mjs";
 import { createCarefaConsentReader } from "../companion/consent-client.mjs";
@@ -15,14 +16,27 @@ export async function initializeCompanionLifecycle(
   );
   if (!result.rows[0]?.relation)
     throw Error("Approved Phase 2 schema migration is missing");
+  const phase3 = env.CAREFA_COMPANION_PHASE3 === "enabled";
+  if (phase3) {
+    const schema = await storage.pool.query(
+      "SELECT to_regclass('companion_consents') AS relation",
+    );
+    if (!schema.rows[0]?.relation)
+      throw Error("Approved Phase 3 consent migration is missing");
+  }
   return createCompanionLinkService({
-    store: createCompanionLinkStore(storage.pool),
+    store: phase3
+      ? createConsentGenerationStore(storage.pool)
+      : createCompanionLinkStore(storage.pool),
+    terminalConsent: phase3,
     issuer: env.RENDER_PUBLIC_URL,
-    getConsent: createCarefaConsentReader({
-      endpoint: env.CAREFA_COMPANION_CONSENT_FUNCTION_URL,
-      carefaOrigin: env.CAREFA_LINK_FUNCTION_URL,
-      secret: env.CAREFA_COMPANION_INTERNAL_SECRET,
-      fetchImpl,
-    }),
+    getConsent: phase3
+      ? null
+      : createCarefaConsentReader({
+          endpoint: env.CAREFA_COMPANION_CONSENT_FUNCTION_URL,
+          carefaOrigin: env.CAREFA_LINK_FUNCTION_URL,
+          secret: env.CAREFA_COMPANION_INTERNAL_SECRET,
+          fetchImpl,
+        }),
   });
 }

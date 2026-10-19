@@ -310,3 +310,62 @@ test("staged read validates bridge and per-user links, rejects owner override an
   for (const c of f.calls.filter((c) => c.entity === "UserCard"))
     assert.equal(c.query.created_by_id, "a");
 });
+
+test("Phase 3 staged approval grants only explicit PostgreSQL consent and never writes a legacy consent boolean", async (t) => {
+  const f = fixture(t);
+  f.secrets.CAREFA_COMPANION_LINK_AUTHORITY = "bridge-postgres-v3";
+  const handler = await entry(t, "carefaAiCompanionApproval", f);
+  assert.equal(
+    (await handler(f.request({ action: "approve", connection_id: "x" })))
+      .status,
+    400,
+  );
+  assert.equal(
+    (
+      await handler(
+        f.request({
+          action: "approve",
+          connection_id: "x",
+          consent_approved: true,
+        }),
+      )
+    ).status,
+    200,
+  );
+  assert.equal(f.writes.length, 0);
+  const call = f.calls.find(
+    (c) => c.options && JSON.parse(c.options.body).action === "approve",
+  );
+  assert.deepEqual(JSON.parse(call.options.body), {
+    action: "approve",
+    connection_id: "x",
+    consent_approved: true,
+    owner: "a",
+  });
+});
+test("Phase 3 staged withdrawal is first-party only and old consent/schema responses cannot masquerade as generation-bound links", async (t) => {
+  const f = fixture(t);
+  f.secrets.CAREFA_COMPANION_LINK_AUTHORITY = "bridge-postgres-v3";
+  const manage = await entry(t, "carefaAiCompanionConnections", f);
+  assert.equal(
+    (await manage(f.request({ action: "withdraw", owner: "b" }))).status,
+    400,
+  );
+  assert.equal((await manage(f.request({ action: "withdraw" }))).status, 200);
+  assert.equal(f.writes.length, 0);
+  const handler = await entry(t, "carefaAiCompanion", f);
+  assert.equal(
+    (
+      await handler(
+        f.request(
+          { section: "cards" },
+          {
+            "x-carefa-bridge-secret": f.secrets.RENDER_BRIDGE_SECRET,
+            "x-carefa-link-token": f.f.tokens.a,
+          },
+        ),
+      )
+    ).status,
+    401,
+  );
+});

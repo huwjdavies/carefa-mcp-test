@@ -731,6 +731,11 @@ export function createCarefaServer({
   // CAREFA consent adapter by an approved environment. Never auto-enable/migrate it.
   const phase2 = env.CAREFA_COMPANION_PHASE2 === "enabled";
   if (
+    env.CAREFA_COMPANION_PHASE3 === "enabled" &&
+    (!phase2 || companionLifecycle?.authority !== "postgres-v1-generation")
+  )
+    throw Error("Phase 3 requires the terminal PostgreSQL consent authority");
+  if (
     phase2 &&
     (!companionLifecycle ||
       !durableStorage?.grants ||

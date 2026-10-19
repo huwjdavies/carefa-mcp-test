@@ -128,7 +128,9 @@ export function createCompanionReader({
       consent.created_by_id !== link.user_id ||
       consent.provider !== "ChatGPT" ||
       consent.permission_granted !== true ||
-      consent.consent_version !== CONSENT_VERSION
+      consent.consent_version !== CONSENT_VERSION ||
+      (link.consent_generation !== undefined &&
+        consent.consent_generation !== link.consent_generation)
     )
       deny(403, "consent_required");
     return link;

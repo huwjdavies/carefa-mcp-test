@@ -18,6 +18,11 @@ const defaultApi = {
     });
     return r.data || r;
   },
+  async withdraw() {
+    return base44.functions.invoke("carefaAiCompanionConnections", {
+      action: "withdraw",
+    });
+  },
   async disconnect(connectionId) {
     return base44.functions.invoke("carefaAiCompanionConnections", {
       action: "disconnect",
@@ -77,11 +82,12 @@ export default function MyAiAssistants({ api = defaultApi }) {
     };
   }, [refresh]);
   const disconnect = async () => {
-    if (!state?.connection_id) return;
+    if (!state?.connection_id && !state?.terminal_consent) return;
     setBusy(true);
     setError("");
     try {
-      await api.disconnect(state.connection_id);
+      if (state?.terminal_consent && api.withdraw) await api.withdraw();
+      else await api.disconnect(state.connection_id);
       setConfirm(false);
       await refresh();
     } catch {
@@ -106,7 +112,10 @@ export default function MyAiAssistants({ api = defaultApi }) {
       launch = u.href;
   } catch {}
   return (
-    <div className="min-h-screen bg-background text-foreground pb-28">
+    <div
+      className="min-h-screen bg-background text-foreground pb-28"
+      style={{ paddingBottom: "calc(7rem + env(safe-area-inset-bottom))" }}
+    >
       <header className="carefa-page-masthead px-4 pt-8 pb-5">
         <p className="text-primary text-xs font-bold uppercase tracking-widest">
           Your collecting companion
@@ -240,19 +249,21 @@ export default function MyAiAssistants({ api = defaultApi }) {
             <li>“Suggest a fire-themed binder from my cards.”</li>
           </ul>
         </section>
-        {state?.connection_id && (
+        {(state?.connection_id ||
+          (state?.terminal_consent && state?.permission_granted)) && (
           <button
             onClick={() => setConfirm(true)}
             disabled={busy}
             className="min-h-12 w-full rounded-xl border border-border text-sm"
           >
-            Disconnect this CAREFA connection
+            {state?.terminal_consent
+              ? "Withdraw all V1 ChatGPT access"
+              : "Disconnect this CAREFA connection"}
           </button>
         )}
         {confirm && (
           <section
-            role="dialog"
-            aria-modal="true"
+            role="group"
             aria-labelledby="disconnect-title"
             className="rounded-2xl border border-primary/40 bg-card p-4"
           >

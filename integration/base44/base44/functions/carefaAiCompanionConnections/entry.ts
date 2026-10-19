@@ -42,12 +42,14 @@ export default async function (req: Request): Promise<Response> {
         { status: 401, headers },
       );
     if (
-      secrets.get("CAREFA_COMPANION_LINK_AUTHORITY") === "bridge-postgres-v2"
+      ["bridge-postgres-v2", "bridge-postgres-v3"].includes(
+        secrets.get("CAREFA_COMPANION_LINK_AUTHORITY"),
+      )
     ) {
       const input = await req.json();
       if (
         !input ||
-        !["status", "disconnect"].includes(input.action) ||
+        !["status", "disconnect", "withdraw"].includes(input.action) ||
         Object.keys(input).some((k) => !["action", "connection_id"].includes(k))
       )
         return Response.json(

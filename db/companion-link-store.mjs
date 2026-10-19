@@ -1,19 +1,24 @@
+export const companionLinkView = (row) =>
+  row && {
+    id: row.id,
+    user_id: row.owner_id,
+    provider: "ChatGPT",
+    status: row.state,
+    scope: row.scope,
+    consent_version: row.consent_version,
+    ...(row.consent_generation == null
+      ? {}
+      : { consent_generation: String(row.consent_generation) }),
+    expires_at: row.expires_at?.toISOString(),
+    access_expires_at: row.access_expires_at?.toISOString(),
+    client_verified_at: row.verified_at?.toISOString(),
+    collector_fingerprint: row.fingerprint,
+    created_at: row.created_at?.toISOString(),
+  };
+
 // PostgreSQL is authoritative for NEW V1 connection metadata only. No collection writes.
 export function createCompanionLinkStore(pool) {
-  const view = (row) =>
-    row && {
-      id: row.id,
-      user_id: row.owner_id,
-      provider: "ChatGPT",
-      status: row.state,
-      scope: row.scope,
-      consent_version: row.consent_version,
-      expires_at: row.expires_at?.toISOString(),
-      access_expires_at: row.access_expires_at?.toISOString(),
-      client_verified_at: row.verified_at?.toISOString(),
-      collector_fingerprint: row.fingerprint,
-      created_at: row.created_at?.toISOString(),
-    };
+  const view = companionLinkView;
   return {
     async begin({ id, owner, callbackUrl, expiresAt }) {
       await pool.query(

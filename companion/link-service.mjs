@@ -14,6 +14,7 @@ export function createCompanionLinkService({
   getConsent,
   issuer,
   now = Date.now,
+  terminalConsent = false,
 }) {
   const origin = new URL(issuer);
   if (origin.protocol !== "https:" || origin.origin !== issuer)
@@ -42,7 +43,9 @@ export function createCompanionLinkService({
     return value;
   };
   async function consent(user) {
-    const c = await getConsent(user);
+    const c = await (terminalConsent
+      ? store.currentConsent(user)
+      : getConsent(user));
     if (
       c?.created_by_id !== user ||
       c.provider !== "ChatGPT" ||
@@ -62,7 +65,12 @@ export function createCompanionLinkService({
     )
       reject(401, "invalid_token");
     try {
-      await consent(link.user_id);
+      const current = await consent(link.user_id);
+      if (
+        terminalConsent &&
+        current.consent_generation !== link.consent_generation
+      )
+        reject(401, "invalid_token");
     } catch (error) {
       // An observed withdrawal is terminal for this link. Later consent cannot
       // resurrect the old bearer/refresh family; an outage does not revoke it.
@@ -73,6 +81,9 @@ export function createCompanionLinkService({
     return link;
   }
   return {
+    authority: terminalConsent
+      ? "postgres-v1-generation"
+      : "phase2-consent-adapter",
     async begin(authenticatedOwner, callbackUrl) {
       const user = owner(authenticatedOwner),
         cb = callback(callbackUrl),
@@ -98,12 +109,16 @@ export function createCompanionLinkService({
         read_only: true,
       };
     },
-    async approve(authenticatedOwner, id) {
+    async approve(authenticatedOwner, id, explicitConsent = false) {
       const user = owner(authenticatedOwner);
       if (!opaque(id)) reject(400, "invalid_request");
-      await consent(user);
+      if (terminalConsent && explicitConsent !== true)
+        reject(400, "explicit_consent_required");
+      if (!terminalConsent) await consent(user);
       const code = random(),
-        cb = await store.approve({ id, owner: user, codeHash: digest(code) });
+        cb = await (terminalConsent ? store.approveWithConsent : store.approve)(
+          { id, owner: user, codeHash: digest(code) },
+        );
       if (!cb) reject(409, "approval_expired_or_account_changed");
       const destination = new URL(cb);
       destination.searchParams.set("code", code);
@@ -166,14 +181,24 @@ export function createCompanionLinkService({
       const user = owner(authenticatedOwner);
       const [links, currentConsent] = await Promise.all([
         store.linksForOwner(user),
-        getConsent(user),
+        terminalConsent ? store.currentConsent(user) : getConsent(user),
       ]);
       if (
         links.some((l) => l.user_id !== user) ||
         (currentConsent && currentConsent.created_by_id !== user)
       )
         reject(502, "owner_scope_violation");
-      return { links, consent: currentConsent };
+      return {
+        links,
+        consent: currentConsent,
+        terminal_consent: terminalConsent,
+      };
+    },
+    async withdraw(authenticatedOwner) {
+      const user = owner(authenticatedOwner);
+      if (!terminalConsent) reject(409, "terminal_consent_not_enabled");
+      await store.withdraw(user);
+      return { withdrawn: true, new_authorisation_required: true };
     },
     async disconnect(authenticatedOwner, id) {
       const user = owner(authenticatedOwner);

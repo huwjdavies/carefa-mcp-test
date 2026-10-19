@@ -1,4 +1,5 @@
 // STAGED ONLY. Explicit first-party consent; NO collection writes. Not an MCP tool.
+import { secrets } from "base44:runtime";
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.52";
 import {
   companionBridge,
@@ -28,7 +29,7 @@ export default async function (req: Request): Promise<Response> {
       fields: any = {
         begin: ["callback_url"],
         approval: ["connection_id"],
-        approve: ["connection_id"],
+        approve: ["connection_id", "consent_approved"],
         deny: ["connection_id"],
       };
     if (
@@ -42,7 +43,14 @@ export default async function (req: Request): Promise<Response> {
         { error: "invalid_request" },
         { status: 400, headers },
       );
-    if (input.action === "approve") {
+    const phase3 =
+      secrets.get("CAREFA_COMPANION_LINK_AUTHORITY") === "bridge-postgres-v3";
+    if (input.action === "approve" && phase3 && input.consent_approved !== true)
+      return Response.json(
+        { error: "explicit_consent_required" },
+        { status: 400, headers },
+      );
+    if (input.action === "approve" && !phase3) {
       // Reject a switched account before writing even consent metadata.
       await companionBridge({
         action: "approval",

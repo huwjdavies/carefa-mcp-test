@@ -21,6 +21,7 @@ export function connectionView({
   links = [],
   listingUrl,
   publicReady = false,
+  terminal_consent = false,
   now = Date.now(),
 }) {
   const allowed =
@@ -33,6 +34,8 @@ export function connectionView({
       link.status === "active" &&
       link.scope === "collection:read" &&
       link.consent_version === "2" &&
+      (consent?.consent_generation === undefined ||
+        link.consent_generation === consent.consent_generation) &&
       Number.isFinite(Date.parse(link.access_expires_at)) &&
       Date.parse(link.access_expires_at) > now,
   );
@@ -75,6 +78,7 @@ export function connectionView({
                   : "not_connected";
   return {
     provider: "ChatGPT",
+    terminal_consent,
     status,
     permission_granted: allowed,
     // Pending and unverified links can also be explicitly disconnected.

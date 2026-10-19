@@ -22,6 +22,12 @@ try {
       "utf8",
     ),
   );
+  await pool.query(
+    await readFile(
+      new URL("../db/consent-generation.sql", import.meta.url),
+      "utf8",
+    ),
+  );
 } finally {
   await pool.end();
 }
@@ -32,6 +38,7 @@ const child = spawn(
     "db/durable-grants.integration.test.mjs",
     "db/handshake-store.test.mjs",
     "db/companion-link-store.integration.test.mjs",
+    "db/consent-generation.integration.test.mjs",
   ],
   { stdio: "inherit", env: process.env },
 );

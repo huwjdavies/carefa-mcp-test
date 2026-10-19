@@ -44,21 +44,46 @@ export default async function (req: Request): Promise<Response> {
       base44.asServiceRole.entities,
     );
     if (
-      secrets.get("CAREFA_COMPANION_LINK_AUTHORITY") === "bridge-postgres-v2"
+      ["bridge-postgres-v2", "bridge-postgres-v3"].includes(
+        secrets.get("CAREFA_COMPANION_LINK_AUTHORITY"),
+      )
     ) {
       repository.findLink = async (tokenHash: string) => {
         const link = await companionBridge({ action: "resolve", token });
+        if (
+          secrets.get("CAREFA_COMPANION_LINK_AUTHORITY") ===
+            "bridge-postgres-v3" &&
+          !/^[0-9]+$/.test(link.consent_generation || "")
+        )
+          throw new CompanionError(401, "invalid_token");
         if (link.token_hash !== tokenHash)
           throw new CompanionError(401, "invalid_token");
         return link;
       };
     }
+    if (
+      secrets.get("CAREFA_COMPANION_LINK_AUTHORITY") === "bridge-postgres-v3"
+    ) {
+      repository.latestConsent = async (owner: string) => {
+        const link = await companionBridge({ action: "resolve", token });
+        if (link.user_id !== owner)
+          throw new CompanionError(401, "invalid_token");
+        return {
+          created_by_id: owner,
+          provider: "ChatGPT",
+          permission_granted: true,
+          consent_version: "2",
+          consent_generation: link.consent_generation,
+        };
+      };
+    }
     const reader = createCompanionReader({
       repository,
-      hashToken:
-        secrets.get("CAREFA_COMPANION_LINK_AUTHORITY") === "bridge-postgres-v2"
-          ? companionLinkHash
-          : hash,
+      hashToken: ["bridge-postgres-v2", "bridge-postgres-v3"].includes(
+        secrets.get("CAREFA_COMPANION_LINK_AUTHORITY"),
+      )
+        ? companionLinkHash
+        : hash,
       fingerprint: collectorFingerprint,
     });
     return Response.json(await reader.read(token, body), { headers });

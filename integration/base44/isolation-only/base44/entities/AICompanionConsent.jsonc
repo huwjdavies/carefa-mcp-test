@@ -1,0 +1,12 @@
+{
+  "name":"AICompanionConsent",
+  "type":"object",
+  "properties":{
+    "provider":{"type":"string","enum":["ChatGPT","Gemini","Copilot","Grok"]},
+    "permission_granted":{"type":"boolean","default":false},
+    "connection_status":{"type":"string","enum":["not_connected","pending_provider","connected"],"default":"not_connected"},
+    "consent_version":{"type":"string","default":"1"}
+  },
+  "required":["provider","permission_granted"],
+  "rls":{"create":false,"read":{"created_by_id":"{{user.id}}"},"update":false,"delete":false}
+}

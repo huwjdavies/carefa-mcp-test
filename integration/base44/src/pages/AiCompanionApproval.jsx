@@ -39,7 +39,11 @@ export default function AiCompanionApproval() {
     setBusy(true);
     setError("");
     try {
-      const r = await invoke({ action, connection_id: flow.connection_id });
+      const r = await invoke({
+        action,
+        ...(action === "approve" ? { consent_approved: true } : {}),
+        connection_id: flow.connection_id,
+      });
       const target = new URL(r.redirect_url),
         original = new URL(callback);
       if (

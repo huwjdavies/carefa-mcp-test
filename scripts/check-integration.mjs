@@ -21,6 +21,10 @@ try {
     );
   for (const entry of [
     "src/pages/MyAiAssistants.jsx",
+    "isolation-only/src/pages/AiLink.jsx",
+    "isolation-only/src/pages/AIConnectTest.jsx",
+    "isolation-only/src/components/ai/AiConnectConsentCard.jsx",
+    "isolation-only/src/components/ai/AiLinkStatusCard.jsx",
     "src/pages/AiCompanionApproval.jsx",
     "base44/shared/companion/bridge-api.ts",
     "base44/functions/carefaAiCompanionApproval/entry.ts",

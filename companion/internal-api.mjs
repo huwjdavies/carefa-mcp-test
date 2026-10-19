@@ -24,13 +24,16 @@ export function createCompanionInternalApi({
     const fields = {
       begin: ["owner", "callback_url"],
       approval: ["owner", "connection_id"],
-      approve: ["owner", "connection_id"],
+      approve: ["owner", "connection_id", "consent_approved"],
+      withdraw: ["owner"],
       deny: ["owner", "connection_id"],
       status: ["owner"],
       disconnect: ["owner", "connection_id"],
       resolve: ["token"],
     };
-    const allowed = fields[input.action];
+    const allowed = Object.hasOwn(fields, input.action)
+      ? fields[input.action]
+      : null;
     if (
       !allowed ||
       Object.keys(input).some((k) => k !== "action" && !allowed.includes(k))
@@ -42,7 +45,11 @@ export function createCompanionInternalApi({
       case "approval":
         return service.approval(input.owner, input.connection_id);
       case "approve":
-        return service.approve(input.owner, input.connection_id);
+        return service.approve(
+          input.owner,
+          input.connection_id,
+          input.consent_approved,
+        );
       case "deny":
         return service.deny(input.owner, input.connection_id);
       case "status":
@@ -51,6 +58,8 @@ export function createCompanionInternalApi({
           listingUrl,
           publicReady,
         });
+      case "withdraw":
+        return service.withdraw(input.owner);
       case "disconnect":
         return service.disconnect(input.owner, input.connection_id);
       case "resolve":
