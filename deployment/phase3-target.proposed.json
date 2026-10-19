@@ -1,0 +1,39 @@
+{
+  "status": "PROPOSAL ONLY — NOT APPROVED OR CREATED",
+  "branch": "carefa-multiuser-hardening-20261017",
+  "commit": "PENDING_REVIEWED_COMMIT",
+  "base44": {
+    "name": "CAREFA Companion V1 Isolated Lab",
+    "id": "NOT_CREATED",
+    "backend": "independent empty app backend, never live CAREFA branches"
+  },
+  "render": {
+    "name": "carefa-companion-phase3-lab",
+    "id": "NOT_CREATED",
+    "workspace": "CAREFA Companion Isolated Lab — new zero-cost workspace if eligible",
+    "region": "frankfurt",
+    "plan": "free",
+    "autoDeploy": "no"
+  },
+  "postgres": {
+    "name": "carefa-companion-phase3-db",
+    "id": "NOT_CREATED",
+    "databaseName": "carefa_companion_phase3",
+    "region": "frankfurt",
+    "plan": "free if eligible; otherwise blocked, never paid fallback"
+  },
+  "independentBackendVerified": false,
+  "freshCredentialsVerified": false,
+  "noProductionDataOrWritableAccess": false,
+  "zeroAdditionalCostVerified": false,
+  "quotasSeparateFromProduction": false,
+  "legacyConsentWritesDenied": false,
+  "runtimeRoleVerified": false,
+  "flags": {
+    "CAREFA_COMPANION_V1": "enabled",
+    "CAREFA_COMPANION_PHASE2": "enabled",
+    "CAREFA_COMPANION_PHASE3": "enabled",
+    "CAREFA_COMPANION_LINK_AUTHORITY": "bridge-postgres-v3",
+    "CHATGPT_COMPANION_PUBLIC_READY": "false"
+  }
+}

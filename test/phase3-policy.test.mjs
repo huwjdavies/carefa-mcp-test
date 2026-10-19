@@ -1,3 +1,4 @@
+import { validateIsolatedTarget } from "../deployment/target-policy.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -81,4 +82,42 @@ test("isolated schema closes the direct consent CRUD bypass; replacement legacy 
     assert.ok(!source.includes("AICompanionConsent."));
     assert.ok(!source.includes("carefaAiLink"));
   }
+});
+
+test("deployment preflight refuses unknown IDs, existing unverified targets, missing isolation and implicit cost assumptions", async () => {
+  const proposal = JSON.parse(
+    await readFile(
+      new URL("../deployment/phase3-target.proposed.json", import.meta.url),
+      "utf8",
+    ),
+  );
+  assert.ok(validateIsolatedTarget(proposal).length > 0);
+  const isolated = {
+    ...proposal,
+    commit: "a".repeat(40),
+    base44: { id: "fictional-separate-app" },
+    render: { id: "fictional-new-service" },
+    postgres: {
+      id: "fictional-new-database",
+      databaseName: "carefa_companion_phase3",
+    },
+    independentBackendVerified: true,
+    freshCredentialsVerified: true,
+    noProductionDataOrWritableAccess: true,
+    zeroAdditionalCostVerified: true,
+    quotasSeparateFromProduction: true,
+    legacyConsentWritesDenied: true,
+    runtimeRoleVerified: true,
+  };
+  assert.deepEqual(validateIsolatedTarget(isolated), []);
+  assert.ok(
+    validateIsolatedTarget({
+      ...isolated,
+      base44: { id: "69fc9f9df40058abb77f7f42" },
+    }).length > 0,
+  );
+  assert.ok(
+    validateIsolatedTarget({ ...isolated, zeroAdditionalCostVerified: false })
+      .length > 0,
+  );
 });

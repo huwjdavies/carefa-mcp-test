@@ -239,3 +239,42 @@ integration(
     await assert.rejects(f.service.approve(f.owner, p2.connection_id, true));
   },
 );
+
+integration(
+  "Phase 3 PostgreSQL: isolated runtime privilege pattern permits metadata and denies DDL/collection reads",
+  async (t) => {
+    const f = await setup(t),
+      db = await f.pool.connect(),
+      role =
+        "fixture_" + random().slice(0, 12).toLowerCase().replace(/-/g, "_");
+    try {
+      await db.query("BEGIN");
+      await db.query(
+        `CREATE ROLE ${role} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE`,
+      );
+      await db.query(
+        "CREATE TABLE public.fictional_collection_privilege_probe(id text)",
+      );
+      await db.query(`GRANT USAGE ON SCHEMA public TO ${role}`);
+      await db.query(
+        `GRANT SELECT,INSERT,UPDATE ON public.companion_consents,public.companion_links TO ${role}`,
+      );
+      await db.query(
+        `GRANT SELECT,INSERT,UPDATE,DELETE ON public.oauth_sessions TO ${role}`,
+      );
+      await db.query(`SET LOCAL ROLE ${role}`);
+      await db.query("SELECT owner_id FROM public.companion_consents LIMIT 0");
+      for (const sql of [
+        "SELECT * FROM public.fictional_collection_privilege_probe",
+        "CREATE TABLE public.forbidden_fixture_table(id text)",
+      ]) {
+        await db.query("SAVEPOINT permission_probe");
+        await assert.rejects(db.query(sql), (e) => e.code === "42501");
+        await db.query("ROLLBACK TO SAVEPOINT permission_probe");
+      }
+    } finally {
+      await db.query("ROLLBACK");
+      db.release();
+    }
+  },
+);
