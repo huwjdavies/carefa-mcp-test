@@ -2,6 +2,7 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.52";
 import { secrets } from "base44:runtime";
 import { createConnectionController } from "../../shared/companion/connection-controller.mjs";
+import { companionBridge } from "../../shared/companion/bridge-api.ts";
 import { CompanionError } from "../../shared/companion/reader.mjs";
 const rows = (value: any) => (Array.isArray(value) ? value : value?.items);
 export default async function (req: Request): Promise<Response> {
@@ -40,6 +41,27 @@ export default async function (req: Request): Promise<Response> {
         { error: "sign_in_required" },
         { status: 401, headers },
       );
+    if (
+      secrets.get("CAREFA_COMPANION_LINK_AUTHORITY") === "bridge-postgres-v2"
+    ) {
+      const input = await req.json();
+      if (
+        !input ||
+        !["status", "disconnect"].includes(input.action) ||
+        Object.keys(input).some((k) => !["action", "connection_id"].includes(k))
+      )
+        return Response.json(
+          { error: "invalid_request" },
+          { status: 400, headers },
+        );
+      const result = await companionBridge({ ...input, owner: user.id });
+      if (input.action === "status")
+        result.collector_label =
+          typeof user.username === "string" && !user.username.includes("@")
+            ? user.username.slice(0, 80)
+            : "Your CAREFA collector";
+      return Response.json(result, { headers });
+    }
     const entity = sdk.asServiceRole.entities;
     const controller = createConnectionController({
       listingUrl: secrets.get("CHATGPT_COMPANION_LISTING_URL"),

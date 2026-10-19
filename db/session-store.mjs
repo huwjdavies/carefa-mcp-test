@@ -19,7 +19,7 @@ export function createSessionStore(pool) {
     },
     async findForRevocation(tokenHash) {
       const result = await pool.query(
-        "SELECT client_id,grant_id FROM oauth_sessions WHERE token_hash=$1",
+        "SELECT client_id,grant_id,payload_ciphertext FROM oauth_sessions WHERE token_hash=$1",
         [tokenHash],
       );
       return result.rows[0] ?? null;

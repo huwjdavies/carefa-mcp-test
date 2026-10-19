@@ -33,6 +33,9 @@ export function createOAuthBridge({
   now = Date.now,
   durableGrants = null,
   durableHandshakes = null,
+  validateLink = null,
+  revokeLink = null,
+  approvalPath = "/AiLink",
 }) {
   if (
     !Array.isArray(redirectUris) ||
@@ -110,11 +113,13 @@ export function createOAuthBridge({
     const match = /^Bearer ([A-Za-z0-9_-]{43})$/i.exec(
       req.headers.authorization || "",
     );
-    const grant = match
+    let grant = match
       ? durableGrants
         ? await durableGrants.authenticate(match[1], resource)
         : tokens.get(hash(match[1]))
       : undefined;
+    if (grant && validateLink && !(await validateLink(grant.linkToken)))
+      return undefined;
     return grant?.scope === SCOPE &&
       grant.resource === resource &&
       typeof grant.linkToken === "string"
@@ -175,6 +180,7 @@ export function createOAuthBridge({
     ) {
       return json(res, 200, {
         issuer,
+        authorization_response_iss_parameter_supported: true,
         authorization_endpoint: `${issuer}/oauth/authorize`,
         token_endpoint: `${issuer}/oauth/token`,
         registration_endpoint: `${issuer}/oauth/register`,
@@ -302,7 +308,7 @@ export function createOAuthBridge({
           callbackUrl,
           expires: now() + SESSION_MS,
         });
-      const approval = new URL("/AiLink", appUrl);
+      const approval = new URL(approvalPath, appUrl);
       approval.searchParams.set("cb", callbackUrl);
       approval.searchParams.set("svc", "Render MCP");
       return redirect(res, approval.toString(), {
@@ -337,6 +343,7 @@ export function createOAuthBridge({
         return error(res, 400, "invalid_request");
       const destination = new URL(entry.redirect_uri);
       destination.searchParams.set("state", entry.state);
+      destination.searchParams.set("iss", issuer);
       if (url.searchParams.has("error")) {
         console.warn("[CAREFA OAuth] Callback returned upstream denial");
         destination.searchParams.set("error", "access_denied");
@@ -401,6 +408,7 @@ export function createOAuthBridge({
         const key = hash(p.get("token") || "");
         const grant = tokens.get(key) || refreshTokens.get(key);
         if (grant?.client_id === client.client_id) {
+          if (revokeLink) await revokeLink(grant.linkToken);
           for (const map of [tokens, refreshTokens])
             for (const [k, v] of map)
               if (
@@ -410,7 +418,11 @@ export function createOAuthBridge({
                 map.delete(k);
         }
         if (durableGrants)
-          await durableGrants.revoke(p.get("token") || "", client.client_id);
+          await durableGrants.revoke(
+            p.get("token") || "",
+            client.client_id,
+            revokeLink,
+          );
         if (tokens.get(key)?.client_id === client.client_id) tokens.delete(key);
         if (refreshTokens.get(key)?.client_id === client.client_id)
           refreshTokens.delete(key);
@@ -421,6 +433,7 @@ export function createOAuthBridge({
           refreshToken: p.get("refresh_token"),
           clientId: client.client_id,
           resource: p.get("resource"),
+          validateLink,
         });
         return result
           ? json(res, 200, result)
@@ -432,20 +445,28 @@ export function createOAuthBridge({
         // Consume before any await: one-time rotating refresh credentials.
         if (
           !session ||
+          session.consumed ||
           session.client_id !== client.client_id ||
           session.expires <= now() ||
           p.get("resource") !== resource
         )
           return error(res, 400, "invalid_grant");
-        refreshTokens.delete(oldKey);
+        if (validateLink && !(await validateLink(session.linkToken)))
+          return error(res, 400, "invalid_grant");
+        // Recheck after asynchronous validation: another request may revoke or rotate it.
+        if (refreshTokens.get(oldKey) !== session)
+          return error(res, 400, "invalid_grant");
+        session.consumed = true;
         const accessToken = random(),
           refreshToken = random();
         tokens.set(hash(accessToken), {
           ...session,
+          consumed: false,
           expires: now() + TOKEN_MS,
         });
         refreshTokens.set(hash(refreshToken), {
           ...session,
+          consumed: false,
           expires: now() + REFRESH_MS,
         });
         return json(res, 200, {
@@ -473,6 +494,8 @@ export function createOAuthBridge({
         !/^[A-Za-z0-9._~-]{43,128}$/.test(verifier) ||
         !equal(hash(verifier), entry.code_challenge)
       )
+        return error(res, 400, "invalid_grant");
+      if (validateLink && !(await validateLink(entry.linkToken)))
         return error(res, 400, "invalid_grant");
       if (tokens.size >= MAX_ENTRIES)
         return error(res, 429, "temporarily_unavailable");

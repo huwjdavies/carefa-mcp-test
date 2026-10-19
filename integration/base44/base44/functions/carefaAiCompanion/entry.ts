@@ -6,6 +6,10 @@ import {
   CompanionError,
 } from "../../shared/companion/reader.mjs";
 import { createBase44ReadRepository } from "../../shared/companion/base44-repository.mjs";
+import {
+  companionBridge,
+  companionLinkHash,
+} from "../../shared/companion/bridge-api.ts";
 import { collectorFingerprint } from "../../shared/collectorFingerprint.ts";
 import { hash, constantTimeEqual } from "../../shared/aiLink.ts";
 export default async function (req: Request): Promise<Response> {
@@ -36,9 +40,25 @@ export default async function (req: Request): Promise<Response> {
     // The shared credential authenticates the bridge only; the per-user link selects the owner.
     const base44 = createClientFromRequest(req);
     const body = await req.json();
+    const repository = createBase44ReadRepository(
+      base44.asServiceRole.entities,
+    );
+    if (
+      secrets.get("CAREFA_COMPANION_LINK_AUTHORITY") === "bridge-postgres-v2"
+    ) {
+      repository.findLink = async (tokenHash: string) => {
+        const link = await companionBridge({ action: "resolve", token });
+        if (link.token_hash !== tokenHash)
+          throw new CompanionError(401, "invalid_token");
+        return link;
+      };
+    }
     const reader = createCompanionReader({
-      repository: createBase44ReadRepository(base44.asServiceRole.entities),
-      hashToken: hash,
+      repository,
+      hashToken:
+        secrets.get("CAREFA_COMPANION_LINK_AUTHORITY") === "bridge-postgres-v2"
+          ? companionLinkHash
+          : hash,
       fingerprint: collectorFingerprint,
     });
     return Response.json(await reader.read(token, body), { headers });

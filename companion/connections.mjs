@@ -43,20 +43,45 @@ export function connectionView({
         Number.isFinite(Date.parse(link.client_verified_at)) &&
         Date.parse(link.client_verified_at) <= now,
     );
+  const fresh = (link) =>
+    Number.isFinite(Date.parse(link.expires_at)) &&
+    Date.parse(link.expires_at) > now;
+  const recent = [...links]
+    .filter((l) => l.provider === "ChatGPT")
+    .sort(
+      (a, b) => Date.parse(b.created_at || 0) - Date.parse(a.created_at || 0),
+    );
+  const pending = recent.find((l) => l.status === "pending" && fresh(l));
+  const approved = recent.find((l) => l.status === "approved" && fresh(l));
+  const latest = recent[0];
+  const status = verified
+    ? "connected"
+    : allowed && active.length
+      ? "awaiting_verification"
+      : pending
+        ? "awaiting_authorisation"
+        : allowed && approved
+          ? "awaiting_verification"
+          : latest?.status === "failed"
+            ? "connection_failed"
+            : latest?.status === "revoked"
+              ? "disconnected"
+              : recent.some((l) =>
+                    ["active", "approved", "pending"].includes(l.status),
+                  )
+                ? "expired"
+                : allowed
+                  ? "awaiting_chatgpt"
+                  : "not_connected";
   return {
     provider: "ChatGPT",
-    status: verified
-      ? "connected"
-      : allowed
-        ? active.length
-          ? "awaiting_verification"
-          : "awaiting_chatgpt"
-        : links.some((link) => link.status === "active")
-          ? "reconnect_required"
-          : "not_connected",
+    status,
     permission_granted: allowed,
-    connection_id: verified?.id ?? null,
+    // Pending and unverified links can also be explicitly disconnected.
+    connection_id:
+      verified?.id ?? active[0]?.id ?? pending?.id ?? approved?.id ?? null,
     verified_at: verified?.client_verified_at ?? null,
+    verification_basis: verified ? "successful_protected_oauth_read" : null,
     listing_url: publicReady ? chatgptListingUrl(listingUrl) : null,
     available: publicReady && !!chatgptListingUrl(listingUrl),
     read_only: true,

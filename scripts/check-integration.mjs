@@ -21,6 +21,10 @@ try {
     );
   for (const entry of [
     "src/pages/MyAiAssistants.jsx",
+    "src/pages/AiCompanionApproval.jsx",
+    "base44/shared/companion/bridge-api.ts",
+    "base44/functions/carefaAiCompanionApproval/entry.ts",
+    "base44/functions/carefaAiCompanionConsent/entry.ts",
     "base44/functions/carefaAiCompanion/entry.ts",
     "base44/functions/carefaAiCompanionConnections/entry.ts",
   ]) {
@@ -34,7 +38,7 @@ try {
     });
   }
   console.log(
-    "PASS: staged JSX and both TypeScript entrypoints compile; package materializes without deployment",
+    "PASS: staged JSX and all TypeScript entrypoints compile; package materializes without deployment",
   );
 } finally {
   await rm(temporary, { recursive: true, force: true });

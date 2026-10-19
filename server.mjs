@@ -1,4 +1,5 @@
 import { createOAuthBridge } from "./oauth.mjs";
+import { initializeCompanionLifecycle } from "./db/initialize-companion.mjs";
 import { initializeDurableGrants } from "./db/initialize.mjs";
 import http from "node:http";
 import { pathToFileURL } from "node:url";
@@ -7,6 +8,7 @@ import {
   validateCompanionInput,
   projectCompanionResult,
 } from "./companion/tools.mjs";
+import { createCompanionInternalApi } from "./companion/internal-api.mjs";
 import { projectCard } from "./companion/reader.mjs";
 
 import { randomUUID } from "node:crypto";
@@ -16,6 +18,7 @@ export function createCarefaServer({
   fetchImpl = globalThis.fetch,
   durableStorage = null,
   logger = console,
+  companionLifecycle = null,
 } = {}) {
   // CAREFA Render MCP bridge
 
@@ -474,14 +477,21 @@ export function createCarefaServer({
                     true,
                   ),
             );
-          return rpcResult(
-            id,
-            toolText(
-              JSON.stringify(
-                projectCompanionResult(await response.json(), input.section),
-              ),
-            ),
+          const projected = projectCompanionResult(
+            await response.json(),
+            input.section,
           );
+          if (env.CAREFA_COMPANION_PHASE2 === "enabled") {
+            // Receipt only after a protected, projected real data response and a
+            // second grant check. Demo/connection-test/tools-list never verify.
+            if (!(await oauth.authenticate(req)))
+              return rpcResult(id, authToolError());
+            await companionLifecycle.verifiedRead(
+              req.carefaLinkToken,
+              projected.collector_fingerprint,
+            );
+          }
+          return rpcResult(id, toolText(JSON.stringify(projected)));
         } catch {
           return rpcResult(
             id,
@@ -701,12 +711,35 @@ export function createCarefaServer({
     );
   }
 
+  // Lifecycle must be explicitly assembled with its PostgreSQL store and trusted
+  // CAREFA consent adapter by an approved environment. Never auto-enable/migrate it.
+  const phase2 = env.CAREFA_COMPANION_PHASE2 === "enabled";
+  if (
+    phase2 &&
+    (!companionLifecycle ||
+      !durableStorage?.grants ||
+      !durableStorage?.handshakes)
+  )
+    throw Error(
+      "Phase 2 requires transactional storage and a trusted consent adapter",
+    );
+  const internalApi = phase2
+    ? createCompanionInternalApi({
+        service: companionLifecycle,
+        secret: env.CAREFA_COMPANION_INTERNAL_SECRET,
+        listingUrl: env.CHATGPT_COMPANION_LISTING_URL,
+        publicReady: env.CHATGPT_COMPANION_PUBLIC_READY === "true",
+      })
+    : null;
   const oauth = createOAuthBridge({
     publicUrl: PUBLIC_URL,
     appUrl: CAREFA_APP_URL,
     redirectUris: JSON.parse(env.OAUTH_REDIRECT_URIS || "[]"),
     configured,
-    exchangeCode,
+    exchangeCode: phase2 ? companionLifecycle.exchangeCode : exchangeCode,
+    validateLink: phase2 ? companionLifecycle.validate : null,
+    revokeLink: phase2 ? companionLifecycle.revokeToken : null,
+    approvalPath: phase2 ? "/AiCompanionApproval" : "/AiLink",
     durableGrants: durableStorage?.grants ?? null,
     durableHandshakes: durableStorage?.handshakes ?? null,
   });
@@ -727,12 +760,53 @@ export function createCarefaServer({
 
           req.method,
 
-          path,
+          [
+            "/mcp",
+            "/health",
+            "/oauth/authorize",
+            "/oauth/token",
+            "/oauth/revoke",
+            "/oauth/register",
+            "/link/callback",
+          ].includes(path)
+            ? path
+            : "[other-route]",
 
           res.statusCode,
         );
       });
 
+      if (path === "/internal/companion") {
+        if (!internalApi) return sendJson(res, 404, { error: "not_found" });
+        if (req.method !== "POST")
+          return sendJson(res, 405, { error: "method_not_allowed" });
+        if (req.headers["content-type"]?.split(";")[0] !== "application/json")
+          return sendJson(res, 415, { error: "invalid_request" });
+        let raw = "";
+        for await (const chunk of req) {
+          raw += chunk.toString("utf8");
+          if (Buffer.byteLength(raw) > 4096)
+            return sendJson(res, 413, { error: "request_too_large" });
+        }
+        try {
+          return sendJson(
+            res,
+            200,
+            await internalApi(
+              req.headers["x-carefa-companion-internal"],
+              JSON.parse(raw),
+            ),
+            { "Cache-Control": "no-store" },
+          );
+        } catch (e) {
+          return sendJson(
+            res,
+            e.status || 503,
+            { error: e.status ? e.code : "connection_unavailable" },
+            { "Cache-Control": "no-store" },
+          );
+        }
+      }
       if (await oauth.handle(req, res, url)) return;
 
       if (req.method === "OPTIONS") {
@@ -946,7 +1020,21 @@ export function createCarefaServer({
 }
 export async function startCarefaServer(env = process.env) {
   const durableStorage = await initializeDurableGrants(env);
-  const { server } = createCarefaServer({ env, durableStorage });
+  let companionLifecycle;
+  try {
+    companionLifecycle = await initializeCompanionLifecycle(
+      env,
+      durableStorage,
+    );
+  } catch (error) {
+    if (durableStorage) await durableStorage.pool.end();
+    throw error;
+  }
+  const { server } = createCarefaServer({
+    env,
+    durableStorage,
+    companionLifecycle,
+  });
   server.listen(Number(env.PORT || 10000), "0.0.0.0", () =>
     console.log("CAREFA MCP server listening on port " + server.address().port),
   );

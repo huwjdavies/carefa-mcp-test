@@ -80,7 +80,7 @@ export function createDurableGrants({ pool, encryptionKey, now = Date.now }) {
         ? payload
         : null;
     },
-    async refresh({ refreshToken, clientId, resource }) {
+    async refresh({ refreshToken, clientId, resource, validateLink }) {
       if (!refreshToken || !clientId || !resource) return null;
       const row = await store.get(digest(refreshToken));
       if (
@@ -93,6 +93,7 @@ export function createDurableGrants({ pool, encryptionKey, now = Date.now }) {
       const payload = crypto.decrypt(row.payload_ciphertext);
       if (payload.resource !== resource || payload.scope !== "collection:read")
         return null;
+      if (validateLink && !(await validateLink(payload.linkToken))) return null;
       const accessToken = random(),
         nextRefreshToken = random();
       const accepted = await store.rotate({
@@ -124,11 +125,17 @@ export function createDurableGrants({ pool, encryptionKey, now = Date.now }) {
         scope: payload.scope,
       };
     },
-    async revoke(token, clientId) {
+    async revoke(token, clientId, revokeLink) {
       if (!token || !clientId) return;
       const row = await store.findForRevocation(digest(token));
-      if (row?.client_id === clientId)
+      if (row?.client_id === clientId) {
+        if (revokeLink) {
+          const session = row;
+          const payload = crypto.decrypt(session.payload_ciphertext);
+          await revokeLink(payload.linkToken);
+        }
         await store.revokeGrant(row.grant_id, clientId);
+      }
     },
   };
 }

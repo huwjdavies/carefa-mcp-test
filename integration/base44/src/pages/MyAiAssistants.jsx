@@ -27,8 +27,12 @@ const defaultApi = {
 };
 const labels = {
   not_connected: "Not connected",
+  awaiting_authorisation: "Awaiting authorisation",
+  expired: "Expired — reconnect to continue",
+  disconnected: "Disconnected",
+  connection_failed: "Connection failed",
   awaiting_chatgpt: "Finish in ChatGPT",
-  awaiting_verification: "Waiting for verification",
+  awaiting_verification: "Authorised — waiting for a collection read",
   connected: "Connected",
   reconnect_required: "Reconnect required",
 };
@@ -177,7 +181,7 @@ export default function MyAiAssistants({ api = defaultApi }) {
           </button>
           {state?.verified_at && (
             <p className="text-xs text-muted-foreground">
-              CAREFA access last verified{" "}
+              CAREFA read-only access last verified{" "}
               {new Date(state.verified_at).toLocaleString()}. ChatGPT may ask
               you to reconnect.
             </p>
