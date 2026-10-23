@@ -33,7 +33,7 @@ jobs:
                       cid=str(c.get('id',''))
                       if not cid.startswith(setid+'-'):continue
                       num=cid[len(setid)+1:]
-                      jobs.append({'set_id':setid,'number':num,'name':c.get('name',''),'card_id':cid,'source_image':c.get('image','')})
+                      jobs.append({'set_id':setid,'number':num,'name':c.get('name',''),'card_id':cid,'source_image':'https://assets.tcgdex.net/en/base/'+setid+'/'+num})
                   print('DISCOVERED',setid,len(cards))
               except Exception as e:
                   errors.append({'set_id':setid,'error':str(e)[:300]})
