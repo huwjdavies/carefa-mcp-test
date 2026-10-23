@@ -3,8 +3,6 @@ on:
   push:
     branches:
       - carefa-image-acquisition-pilot-20261023
-    paths:
-      - .github/workflows/carefa-image-pilot.yml
   workflow_dispatch:
 
 permissions:
