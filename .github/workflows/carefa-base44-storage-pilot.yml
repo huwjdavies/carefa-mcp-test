@@ -1,0 +1,63 @@
+name: CAREFA Base44 storage pilot (five images)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  upload-five:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check private credentials are configured
+        env:
+          CAREFA_BASE44_TOKEN: ${{ secrets.CAREFA_BASE44_TOKEN }}
+        run: |
+          if [ -z "$CAREFA_BASE44_TOKEN" ]; then
+            echo "::error::Missing CAREFA_BASE44_TOKEN repository secret. Configure a narrowly scoped authorized token; never paste it into workflow files or chat."
+            exit 1
+          fi
+      - name: Upload five scans and verify Base44 stored bytes
+        env:
+          CAREFA_BASE44_TOKEN: ${{ secrets.CAREFA_BASE44_TOKEN }}
+        run: |
+          python3 - <<'PY'
+          import hashlib,json,os,time,urllib.request,urllib.error,pathlib
+          app='69fc9f9df40058abb77f7f42'
+          api='https://app.base44.com/api/apps/'+app+'/integration-endpoints/Core/UploadFile'
+          root=pathlib.Path('carefa-base44-pilot')
+          root.mkdir(exist_ok=True)
+          results=[]
+          token=os.environ['CAREFA_BASE44_TOKEN']
+          for n in range(1,6):
+            item={'set_id':'base1','collector_number':n,'status':'FAILED'}
+            try:
+              source=f'https://assets.tcgdex.net/en/base/base1/{n}/high.webp'
+              req=urllib.request.Request(source,headers={'User-Agent':'CAREFA-Image-Pilot/1.0'})
+              with urllib.request.urlopen(req,timeout=30) as response: data=response.read(4000001)
+              if len(data)<1000 or len(data)>4000000 or data[:4]!=b'RIFF' or data[8:12]!=b'WEBP': raise ValueError('Invalid downloaded WebP')
+              boundary='----CarefaPilotUploadBoundary'
+              filename=f'base1_{n:03d}.webp'
+              body=(f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="{filename}"\r\nContent-Type: image/webp\r\n\r\n').encode()+data+(f'\r\n--{boundary}--\r\n').encode()
+              upload=urllib.request.Request(api,data=body,headers={'Authorization':'Bearer '+token,'X-App-Id':app,'Content-Type':'multipart/form-data; boundary='+boundary},method='POST')
+              with urllib.request.urlopen(upload,timeout=60) as response: payload=json.load(response)
+              url=payload.get('file_url') or payload.get('data',{}).get('file_url')
+              if not url or not url.startswith('https://'): raise ValueError('Upload returned no secure file URL')
+              with urllib.request.urlopen(urllib.request.Request(url,headers={'User-Agent':'CAREFA-Image-Pilot/1.0'}),timeout=40) as response: stored=response.read(4000001)
+              if hashlib.sha256(data).digest()!=hashlib.sha256(stored).digest(): raise ValueError('Stored bytes differ from source')
+              item.update(status='STORED_HASH_VERIFIED',sha256=hashlib.sha256(data).hexdigest(),bytes=len(data),stored_url=url,source_url=source)
+            except Exception as e:
+              item['error']=str(e)[:220]
+            results.append(item)
+            print('CARD',n,item['status'],item.get('error',''))
+            time.sleep(1)
+          (root/'results.json').write_text(json.dumps({'results':results,'printing_status':'DOWNLOADED_UNREVIEWED'},indent=2))
+          if sum(r['status']=='STORED_HASH_VERIFIED' for r in results)!=5: raise SystemExit('Five-image upload verification did not fully pass')
+          PY
+      - name: Preserve pilot verification report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: carefa-base44-storage-pilot-results
+          path: carefa-base44-pilot/
+          retention-days: 7
+          if-no-files-found: warn
