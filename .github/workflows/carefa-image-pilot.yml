@@ -1,0 +1,55 @@
+name: CAREFA five-card image acquisition pilot
+on:
+  push:
+    branches:
+      - carefa-image-acquisition-pilot-20261023
+    paths:
+      - .github/workflows/carefa-image-pilot.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  acquire:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Fetch and verify five Base Set scans
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, pathlib, urllib.request, urllib.error
+          root=pathlib.Path('carefa-acquired-images')
+          root.mkdir()
+          cards=[(1,'Alakazam'),(2,'Blastoise'),(3,'Chansey'),(4,'Charizard'),(5,'Clefairy')]
+          results=[]
+          for number,name in cards:
+              url=f'https://assets.tcgdex.net/en/base/base1/{number}/high.webp'
+              entry={'set_id':'base1','number':str(number),'name':name,'source_url':url,'source':'TCGdex','status':'FAILED'}
+              try:
+                  request=urllib.request.Request(url,headers={'User-Agent':'CAREFA-Research-ImagePilot/1.0'})
+                  with urllib.request.urlopen(request,timeout=18) as response:
+                      data=response.read(3000001)
+                      ctype=response.headers.get('Content-Type','')
+                  if len(data)>3000000 or len(data)<1000:
+                      raise ValueError('invalid file size')
+                  if not data.startswith(b'RIFF') or data[8:12]!=b'WEBP':
+                      raise ValueError('not WebP data')
+                  file=f'base1_{number:03d}.webp'
+                  (root/file).write_bytes(data)
+                  entry.update(status='DOWNLOADED_UNREVIEWED',file=file,bytes=len(data),sha256=hashlib.sha256(data).hexdigest(),content_type=ctype)
+              except Exception as exc:
+                  entry['error']=str(exc)[:350]
+              results.append(entry)
+              print(f"{name}: {entry['status']}")
+          (root/'manifest.json').write_text(json.dumps(results,indent=2))
+          print('Downloaded',sum(x['status']=='DOWNLOADED_UNREVIEWED' for x in results),'of',len(results))
+          PY
+      - name: Upload acquisition files and manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: carefa-base-set-five-card-pilot
+          path: carefa-acquired-images/
+          retention-days: 3
+          if-no-files-found: error
