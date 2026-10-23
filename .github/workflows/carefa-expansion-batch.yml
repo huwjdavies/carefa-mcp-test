@@ -1,0 +1,80 @@
+name: CAREFA English catalogue expansion batch
+on:
+  push:
+    branches: [carefa-image-acquisition-pilot-20261023]
+    paths: [.github/workflows/carefa-expansion-batch.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  acquire:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Acquire next English sets (maximum 500 cards)
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import concurrent.futures, hashlib, json, pathlib, time, urllib.request
+          root=pathlib.Path('carefa-expansion-batch')
+          root.mkdir(exist_ok=True)
+          # Early English sets. Set/card identities are sourced from TCGdex's live set index.
+          ids=['base2','base3','base4','base5','base6','basep']
+          def get_json(url):
+              req=urllib.request.Request(url,headers={'User-Agent':'CAREFA-Research-Archive/1.0'})
+              with urllib.request.urlopen(req,timeout=25) as r:return json.load(r)
+          jobs=[]; errors=[]
+          for setid in ids:
+              try:
+                  info=get_json('https://api.tcgdex.net/v2/en/sets/'+setid)
+                  cards=info.get('cards',[])
+                  for c in cards:
+                      if len(jobs)>=500:break
+                      cid=str(c.get('id',''))
+                      if not cid.startswith(setid+'-'):continue
+                      num=cid[len(setid)+1:]
+                      jobs.append({'set_id':setid,'number':num,'name':c.get('name',''),'card_id':cid,'source_image':c.get('image','')})
+                  print('DISCOVERED',setid,len(cards))
+              except Exception as e:
+                  errors.append({'set_id':setid,'error':str(e)[:300]})
+                  print('DISCOVERY FAILED',setid,str(e)[:180])
+          def fetch(card):
+              result=dict(card,status='MISSING')
+              base=card['source_image']
+              if not base:
+                  result['error']='No image reference in set index';return result
+              for ext in ['/high.webp','/high.png']:
+                  url=base+ext
+                  for attempt in range(2):
+                      try:
+                          req=urllib.request.Request(url,headers={'User-Agent':'CAREFA-Research-Archive/1.0'})
+                          with urllib.request.urlopen(req,timeout=25) as response:data=response.read(4000001)
+                          webp=data[:4]==b'RIFF' and data[8:12]==b'WEBP'
+                          png=data.startswith(bytes.fromhex('89504e470d0a1a0a'))
+                          if not (1000<=len(data)<=4000000 and (webp or png)):raise ValueError('Invalid image payload')
+                          suffix='webp' if webp else 'png'
+                          name=card['card_id'].replace('/','_')+'.'+suffix
+                          (root/name).write_bytes(data)
+                          result.update(status='DOWNLOADED_UNREVIEWED',file=name,source_url=url,bytes=len(data),sha256=hashlib.sha256(data).hexdigest())
+                          result.pop('error',None)
+                          return result
+                      except Exception as e:
+                          result['error']=str(e)[:200]
+                          if attempt==0:time.sleep(0.5)
+              return result
+          with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
+              results=list(pool.map(fetch,jobs))
+          (root/'manifest.json').write_text(json.dumps({'batch':'early English sets, max 500','results':results,'discovery_errors':errors},indent=2))
+          good=sum(x['status']=='DOWNLOADED_UNREVIEWED' for x in results)
+          print('TOTAL',good,'/',len(results),'files acquired')
+          for e in errors:print('SET ERROR',e)
+          if not jobs or good==0:raise SystemExit('No images acquired: inspect discovery and source failures')
+          PY
+      - name: Archive acquired images and source manifest
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: carefa-english-expansion-batch-001
+          path: carefa-expansion-batch/
+          retention-days: 7
+          if-no-files-found: warn
